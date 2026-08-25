@@ -1,0 +1,41 @@
+import * as React from "react";
+import { cn } from "@/lib/utils";
+
+type Tone =
+  | "neutral"
+  | "accent"
+  | "craft"
+  | "success"
+  | "warning"
+  | "danger"
+  | "info"
+  | "special";
+
+const TONES: Record<Tone, string> = {
+  neutral: "bg-sunken text-fg-muted border-line",
+  accent: "bg-accent-soft text-accent-soft-fg border-line-accent/30",
+  craft: "bg-craft-soft text-craft-fg border-craft/40",
+  success: "bg-success-bg text-success-fg border-success-line/30",
+  warning: "bg-warning-bg text-warning-fg border-warning-line/40",
+  danger: "bg-danger-bg text-danger-fg border-danger-line/30",
+  info: "bg-info-bg text-info-fg border-info-line/30",
+  special: "bg-special-bg text-special-fg border-special-line/30",
+};
+
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  tone?: Tone;
+}
+
+export function Badge({ className, tone = "neutral", ...props }: BadgeProps) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-pill border px-2 py-0.5",
+        "text-[0.6875rem] font-semibold tracking-wide whitespace-nowrap",
+        TONES[tone],
+        className,
+      )}
+      {...props}
+    />
+  );
+}

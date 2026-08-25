@@ -1,0 +1,276 @@
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+/* =============================================================================
+   SHARED COLUMN SETS
+
+   SaaS-readiness rule #1: every domain table carries `owner_id` from day one.
+   There is one user today; there is no code path that assumes it.
+
+   TODO(Phase 6): teams arrive as a nullable `organization_id` added to this
+   same helper — every table picks it up at once, and rows with a null org stay
+   personal. Ownership stays on the row either way, so no data migration is
+   needed to introduce the concept.
+   ==========================================================================*/
+
+const ownership = {
+  /**
+   * Always `neon_auth.users_sync.id`.
+   *
+   * Declared as a plain column rather than a Drizzle `.references()` because
+   * the target table is provisioned by Neon Auth, not by our migrations — you
+   * cannot add a foreign key to a table that does not exist yet, and in
+   * Phase 0 there is no database at all. The constraint is added by a
+   * follow-up migration once Auth is enabled; see docs/DATABASE.md.
+   *
+   * The join is still fully typed: import `usersSync` from lib/db/neon-auth.
+   */
+  ownerId: text("owner_id").notNull(),
+};
+
+const timestamps = {
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+};
+
+/* =============================================================================
+   ENUMS
+   ==========================================================================*/
+
+/** The application pipeline, in the order a role actually moves through it. */
+export const applicationStatus = pgEnum("application_status", [
+  "found",
+  "tailored",
+  "applied",
+  "interview",
+  "offer",
+  "rejected",
+  "skipped",
+]);
+
+/* =============================================================================
+   TRACK RECORD — Phase 1
+   ==========================================================================*/
+
+export const company = pgTable(
+  "company",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    name: text("name").notNull(),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [
+    index("company_owner_idx").on(t.ownerId),
+    // One company name per person, not per instance.
+    uniqueIndex("company_owner_name_idx").on(t.ownerId, t.name),
+  ],
+);
+
+export const project = pgTable(
+  "project",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    companyId: uuid("company_id").references(() => company.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    description: text("description"),
+    startDate: date("start_date"),
+    /** Null means ongoing. */
+    endDate: date("end_date"),
+    ...timestamps,
+  },
+  (t) => [
+    index("project_owner_idx").on(t.ownerId),
+    index("project_company_idx").on(t.companyId),
+  ],
+);
+
+/**
+ * The centre of gravity. Everything JobOS generates — resumes, tailored
+ * rewrites, match scores — is derived from these rows, which is why the
+ * columns are prose fields rather than a rigid taxonomy: you should be able
+ * to write the entry in the two minutes you actually have.
+ */
+export const workLog = pgTable(
+  "work_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    /** The day the work happened, not the day it was written down. */
+    date: date("date").notNull(),
+    companyId: uuid("company_id").references(() => company.id, {
+      onDelete: "set null",
+    }),
+    projectId: uuid("project_id").references(() => project.id, {
+      onDelete: "set null",
+    }),
+    tasks: text("tasks").notNull(),
+    challenges: text("challenges"),
+    /** What changed because of it — the part resumes are actually made of. */
+    impact: text("impact"),
+    techTags: text("tech_tags").array().notNull().default([]),
+    tags: text("tags").array().notNull().default([]),
+    minutesSpent: integer("minutes_spent"),
+    ...timestamps,
+  },
+  (t) => [
+    // The timeline query: this person's entries, newest first.
+    index("work_log_owner_date_idx").on(t.ownerId, t.date),
+    index("work_log_project_idx").on(t.projectId),
+  ],
+);
+
+/* =============================================================================
+   MATERIALS — Phases 2 and 3
+   ==========================================================================*/
+
+/**
+ * One master resume per person, held as JSON rather than shredded across
+ * tables: the shape changes every time the template does, and a jsonb column
+ * absorbs that without a migration. Validation happens in Zod at the edge.
+ *
+ * TODO(Phase 2): define the ResumeData zod schema and mirror it here as
+ * `$type<ResumeData>()`.
+ */
+export const resumeMaster = pgTable(
+  "resume_master",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    data: jsonb("data").notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("resume_master_owner_idx").on(t.ownerId)],
+);
+
+/** A point-in-time resume: either a manual save or a JD-tailored rewrite. */
+export const resumeVersion = pgTable(
+  "resume_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    /** Set when this version was tailored for a specific role. */
+    jobId: uuid("job_id").references(() => job.id, { onDelete: "set null" }),
+    label: text("label").notNull(),
+    data: jsonb("data").notNull().default({}),
+    ...timestamps,
+  },
+  (t) => [
+    index("resume_version_owner_idx").on(t.ownerId),
+    index("resume_version_job_idx").on(t.jobId),
+  ],
+);
+
+/* =============================================================================
+   PIPELINE — Phases 4 and 5
+   ==========================================================================*/
+
+/** A saved search. Phase 5's agent runs these on a schedule. */
+export const jobCriteria = pgTable(
+  "job_criteria",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    title: text("title").notNull(),
+    keywords: text("keywords").array().notNull().default([]),
+    location: text("location"),
+    remote: boolean("remote").notNull().default(false),
+    minSalary: integer("min_salary"),
+    seniority: text("seniority"),
+    ...timestamps,
+  },
+  (t) => [index("job_criteria_owner_idx").on(t.ownerId)],
+);
+
+export const job = pgTable(
+  "job",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    /** Which connector found it: greenhouse | lever | adzuna | manual. */
+    source: text("source").notNull(),
+    /** The provider's own id, used to avoid re-importing the same posting. */
+    externalId: text("external_id"),
+    title: text("title").notNull(),
+    company: text("company"),
+    url: text("url"),
+    description: text("description"),
+    postedAt: timestamp("posted_at", { withTimezone: true }),
+    /** 0–100. Null until scored. */
+    matchScore: integer("match_score"),
+    status: applicationStatus("status").notNull().default("found"),
+    ...timestamps,
+  },
+  (t) => [
+    index("job_owner_status_idx").on(t.ownerId, t.status),
+    // Scoped by owner so two people can each hold the same posting.
+    uniqueIndex("job_owner_source_external_idx").on(
+      t.ownerId,
+      t.source,
+      t.externalId,
+    ),
+  ],
+);
+
+export const application = pgTable(
+  "application",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => job.id, { onDelete: "cascade" }),
+    /** Which resume actually went out — the question you cannot answer later. */
+    resumeVersionId: uuid("resume_version_id").references(
+      () => resumeVersion.id,
+      { onDelete: "set null" },
+    ),
+    status: applicationStatus("status").notNull().default("applied"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [
+    index("application_owner_status_idx").on(t.ownerId, t.status),
+    index("application_job_idx").on(t.jobId),
+  ],
+);
+
+/* =============================================================================
+   TYPES — inferred, never hand-written
+   ==========================================================================*/
+
+export type Company = typeof company.$inferSelect;
+export type NewCompany = typeof company.$inferInsert;
+export type Project = typeof project.$inferSelect;
+export type NewProject = typeof project.$inferInsert;
+export type WorkLog = typeof workLog.$inferSelect;
+export type NewWorkLog = typeof workLog.$inferInsert;
+export type ResumeMaster = typeof resumeMaster.$inferSelect;
+export type ResumeVersion = typeof resumeVersion.$inferSelect;
+export type JobCriteria = typeof jobCriteria.$inferSelect;
+export type Job = typeof job.$inferSelect;
+export type NewJob = typeof job.$inferInsert;
+export type Application = typeof application.$inferSelect;
+export type NewApplication = typeof application.$inferInsert;
+export type ApplicationStatus = (typeof applicationStatus.enumValues)[number];
