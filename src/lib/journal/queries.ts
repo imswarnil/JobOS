@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, desc, eq, gte, ilike, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, lte, or, sql } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { company, project, workLog, type LogType } from "@/lib/db/schema";
@@ -17,6 +17,10 @@ export interface JournalFilter {
   q?: string;
   companyId?: string;
   limit?: number;
+  /** Inclusive lower bound on occurred_on. Used by the calendar month. */
+  from?: string;
+  /** Inclusive upper bound on occurred_on. */
+  to?: string;
 }
 
 export type JournalEntry = Awaited<ReturnType<typeof listEntries>>[number];
@@ -36,6 +40,8 @@ function conditions(
   const where = [eq(workLog.ownerId, owner)];
   if (includeType && filter.type) where.push(eq(workLog.type, filter.type));
   if (filter.companyId) where.push(eq(workLog.companyId, filter.companyId));
+  if (filter.from) where.push(gte(workLog.occurredOn, filter.from));
+  if (filter.to) where.push(lte(workLog.occurredOn, filter.to));
   if (filter.q?.trim()) {
     const needle = `%${filter.q.trim()}%`;
     const match = or(
@@ -165,4 +171,43 @@ export async function dashboardStats() {
     entriesThisWeek: Number(week?.n ?? 0),
     streak,
   };
+}
+
+/**
+ * How many entries fall on each day in a range, so the calendar can shade a
+ * cell without loading every entry in the month.
+ *
+ * Returns a plain `{ "2026-08-26": 3 }` map — the calendar renders 42 cells
+ * and a lookup per cell should not be a scan.
+ */
+export async function countsByDay(
+  from: string,
+  to: string,
+  filter: JournalFilter = {},
+): Promise<Record<string, number>> {
+  const db = getDb();
+  const owner = await ownerId();
+
+  const rows = await db
+    .select({ day: workLog.occurredOn, n: count() })
+    .from(workLog)
+    .where(and(...conditions(owner, { ...filter, from, to })))
+    .groupBy(workLog.occurredOn);
+
+  return Object.fromEntries(rows.map((r) => [r.day, Number(r.n)]));
+}
+
+/** The earliest entry, so the calendar knows how far back it is worth paging. */
+export async function earliestEntryDate(): Promise<string | null> {
+  const db = getDb();
+  const owner = await ownerId();
+
+  const [row] = await db
+    .select({ day: workLog.occurredOn })
+    .from(workLog)
+    .where(eq(workLog.ownerId, owner))
+    .orderBy(workLog.occurredOn)
+    .limit(1);
+
+  return row?.day ?? null;
 }

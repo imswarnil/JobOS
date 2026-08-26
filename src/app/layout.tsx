@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree } from "next/font/google";
+import Script from "next/script";
 
 import "./globals.css";
 
@@ -65,10 +66,20 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
-      </head>
-      <body className={`${figtree.variable} antialiased`}>{children}</body>
+      <body className={`${figtree.variable} antialiased`}>
+        {/*
+          `beforeInteractive` puts this in the initial HTML ahead of hydration,
+          which is the only way it can do its job. A bare <script> in <head>
+          also lands in the HTML, but React 19 refuses to render one inside a
+          component tree and warns that it will never execute on the client.
+        */}
+        <Script
+          id="jobos-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
