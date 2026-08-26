@@ -8,12 +8,13 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "vercel:env": "./scripts/vercel-env.sh",
+    "db:check": "node scripts/check.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "node scripts/seed.mjs",
-    "vercel:env": "./scripts/vercel-env.sh"
+    "db:seed": "node scripts/seed.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

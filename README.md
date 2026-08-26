@@ -85,6 +85,7 @@ Then apply the schema and seed the demo:
 pnpm db:migrate
 node scripts/apply-sql.mjs drizzle/0001_owner_foreign_keys.sql
 pnpm db:seed
+pnpm db:check     # confirms all of the above actually landed
 ```
 
 [`docs/DATABASE.md`](docs/DATABASE.md) explains each step, including why the
@@ -174,6 +175,8 @@ from the session, never from the form.
 | `pnpm db:generate` | generate a migration from the schema |
 | `pnpm db:migrate` | apply migrations |
 | `pnpm db:seed` | create and populate the demo account |
+| `pnpm db:check` | verify schema, FKs, auth tables and env in one command |
+| `pnpm vercel:env` | push `.env.local` into a linked Vercel project |
 | `pnpm db:studio` | Drizzle Studio |
 
 ## Licence

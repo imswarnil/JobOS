@@ -81,6 +81,12 @@ actually use if you want to sign in on previews.
 
 ### 4 · Check it
 
+Run `pnpm db:check` first — it verifies the schema, the foreign keys, the
+auth tables and the demo account against whatever `DATABASE_URL` points at,
+which rules out the database before you start debugging the deployment.
+
+Then, on the deployed site:
+
 - `/` loads and the theme toggle works → the build is fine.
 - `/dashboard` while signed out → 307 to `/login` → auth is wired.
 - *Explore the demo account* signs you in → the database, the auth server and
