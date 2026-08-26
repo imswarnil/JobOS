@@ -1,13 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, Check, ChevronDown, Loader2, Plus, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import {
+  AlertCircle,
+  CalendarDays,
+  Check,
+  ChevronDown,
+  Loader2,
+  Plus,
+  X,
+} from "lucide-react";
 
 import { createEntryAction, type EntryFormState } from "@/lib/journal/actions";
 import { LOG_TYPES } from "@/lib/journal/types";
 import type { LogType } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Label } from "@/components/ui/input";
+import { Field, Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 interface Option {
@@ -16,46 +25,58 @@ interface Option {
   companyId?: string | null;
 }
 
+const textarea = cn(
+  "w-full rounded-control border border-line bg-surface px-3 py-2.5",
+  "text-sm leading-relaxed text-fg placeholder:text-fg-faint",
+  "transition-colors duration-200 ease-out hover:border-line-strong",
+);
+
 /**
  * The composer.
  *
- * Type is picked first and visibly, because it changes what the entry is
- * *for* — and the placeholder in the body field changes with it. A prompt
- * specific enough to answer is most of the difference between an empty box
- * and a filled journal.
+ * Optimised for the entry you would otherwise not write. One line and a type
+ * is a complete log — the date defaults to today, the company defaults to
+ * wherever you currently work, and everything else is behind a disclosure.
+ * The long form is still there; it is just no longer the price of admission.
  *
- * Company is optional on every type. A thing you learned on a Sunday is still
- * career history.
+ * ⌘/Ctrl+Enter saves from anywhere in the form, so a log can be typed and
+ * filed without the mouse.
  */
 export function EntryComposer({
   companies,
   projects,
+  currentCompanyId,
 }: {
   companies: Option[];
   projects: Option[];
+  /** Whatever is starred in Career setup. The default for a new entry. */
+  currentCompanyId?: string | null;
 }) {
-  const [open, setOpen] = React.useState(false);
+  const params = useSearchParams();
+  // The sidebar's "Log today's work" links to ?compose=1 so it opens straight
+  // into the composer rather than dropping you on the page to find it.
+  const autoOpen = params.get("compose") === "1";
+
+  const [open, setOpen] = React.useState(autoOpen);
   const [type, setType] = React.useState<LogType>("work");
-  const [companyId, setCompanyId] = React.useState("");
+  const [companyId, setCompanyId] = React.useState(currentCompanyId ?? "");
   const [showDetail, setShowDetail] = React.useState(false);
+  const formRef = React.useRef<HTMLFormElement>(null);
 
   const [state, formAction, pending] = React.useActionState<
     EntryFormState,
     FormData
   >(createEntryAction, {});
 
-  /**
-   * Collapse once the server confirms the insert. Adjusted during render
-   * rather than in an effect so the composer is already closed in the commit
-   * that paints the new entry — an effect would flash the filled form for a
-   * frame first. Collapsing unmounts the form, so the fields reset
-   * themselves; there is no ref to clear.
-   */
+  // Collapse once the server confirms. Adjusted during render rather than in
+  // an effect, so the list repaints already showing the saved entry.
   const [handledOk, setHandledOk] = React.useState(false);
   if (state.ok && !handledOk) {
     setHandledOk(true);
     setShowDetail(false);
     setOpen(false);
+    setType("work");
+    setCompanyId(currentCompanyId ?? "");
   } else if (!state.ok && handledOk) {
     setHandledOk(false);
   }
@@ -65,6 +86,14 @@ export function EntryComposer({
     ? projects.filter((p) => p.companyId === companyId)
     : projects;
   const today = new Date().toISOString().slice(0, 10);
+  const currentName = companies.find((c) => c.id === currentCompanyId)?.name;
+
+  function onKeyDown(event: React.KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      formRef.current?.requestSubmit();
+    }
+  }
 
   if (!open) {
     return (
@@ -72,204 +101,227 @@ export function EntryComposer({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "flex w-full items-center gap-3 rounded-card border border-dashed border-line-strong bg-surface px-5 py-4",
+          "fx-press group flex w-full items-center gap-3 rounded-card border border-dashed border-line-strong bg-surface px-5 py-4",
           "text-left text-sm text-fg-subtle transition-colors duration-200 ease-out",
           "hover:border-line-accent hover:bg-sunken hover:text-fg",
         )}
       >
-        <Plus className="h-4 w-4 shrink-0" strokeWidth={2.25} />
-        What happened today? Work, a lesson, a wall, a trick — all of it counts.
+        <Plus
+          className="h-4 w-4 shrink-0 transition-transform duration-200 ease-out group-hover:rotate-90"
+          strokeWidth={2.25}
+        />
+        What happened today? One line is enough.
       </button>
     );
   }
 
   return (
     <form
+      ref={formRef}
       action={formAction}
-      className="rounded-card border border-line bg-surface shadow-e2"
+      onKeyDown={onKeyDown}
+      className="fx-rise rounded-card border border-line bg-surface shadow-e2"
     >
-      <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-5 py-3.5">
-        <p className="text-sm font-semibold text-fg">New entry</p>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Close composer"
-          className="grid h-7 w-7 place-items-center rounded-control text-fg-faint hover:bg-sunken hover:text-fg"
-        >
-          <X className="h-4 w-4" strokeWidth={1.75} />
-        </button>
-      </div>
+      <input type="hidden" name="type" value={type} />
 
-      <div className="space-y-5 p-5">
-        <input type="hidden" name="type" value={type} />
-
-        <div className="space-y-2">
-          <Label htmlFor="type-work">Kind of entry</Label>
-          <div className="flex flex-wrap gap-1.5" role="radiogroup">
-            {LOG_TYPES.map((t) => {
-              const Icon = t.icon;
-              const active = t.id === type;
-              return (
-                <button
-                  key={t.id}
-                  id={`type-${t.id}`}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  title={t.blurb}
-                  onClick={() => setType(t.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-xs font-semibold",
-                    "transition-colors duration-200 ease-out",
-                    active
-                      ? "border-line-accent bg-accent text-fg-on-accent"
-                      : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-xs text-fg-subtle">{meta.blurb}</p>
+      {/* ── The quick path: type, one line, save ───────────────────────── */}
+      <div className="space-y-3 p-4 sm:p-5">
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Kind of entry">
+          {LOG_TYPES.map((t) => {
+            const Icon = t.icon;
+            const active = t.id === type;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                title={t.blurb}
+                onClick={() => setType(t.id)}
+                className={cn(
+                  "fx-press flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-xs font-semibold",
+                  "transition-colors duration-200 ease-out",
+                  active
+                    ? "border-line-accent bg-accent text-fg-on-accent"
+                    : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                {t.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-[1fr_10rem]">
-          <Field label="Title" htmlFor="title">
-            <Input
-              id="title"
-              name="title"
-              required
-              maxLength={200}
-              placeholder="One line. What would you say if someone asked?"
-            />
-          </Field>
-          <Field label="When" htmlFor="occurredOn">
-            <Input
-              id="occurredOn"
-              name="occurredOn"
+        <input
+          name="title"
+          required
+          maxLength={200}
+          autoFocus
+          placeholder={meta.prompt}
+          aria-label="What happened"
+          className={cn(
+            "w-full rounded-control border border-line bg-surface px-3 py-3",
+            "text-[0.9375rem] text-fg placeholder:text-fg-faint",
+            "transition-colors duration-200 ease-out hover:border-line-strong",
+          )}
+        />
+
+        {/* Defaults, stated rather than hidden — you can see what will be
+            saved without opening anything. */}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
+          <label className="flex items-center gap-1.5">
+            <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <span className="sr-only">Date</span>
+            <input
               type="date"
-              required
+              name="occurredOn"
               defaultValue={today}
               max={today}
+              className="rounded-control border border-line bg-surface px-2 py-1 text-xs text-fg-muted hover:border-line-strong"
             />
-          </Field>
-        </div>
+          </label>
 
-        <Field label="What happened" htmlFor="body">
-          <textarea
-            id="body"
-            name="body"
-            required
-            rows={5}
-            placeholder={meta.prompt}
-            className={cn(
-              "w-full rounded-control border border-line bg-surface px-3 py-2.5",
-              "text-sm leading-relaxed text-fg placeholder:text-fg-faint",
-              "transition-colors duration-200 ease-out hover:border-line-strong",
-            )}
-          />
-        </Field>
+          {currentName && !showDetail ? (
+            <span className="rounded-pill bg-sunken px-2 py-1 text-[0.6875rem] font-medium text-fg-muted">
+              {currentName}
+            </span>
+          ) : null}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Company" htmlFor="companyId" hint="Optional">
-            <Select
-              id="companyId"
-              name="companyId"
-              value={companyId}
-              onChange={(v) => setCompanyId(v)}
-              placeholder="Personal — not for an employer"
-              options={companies}
-            />
-          </Field>
-          <Field label="Project" htmlFor="projectId" hint="Optional">
-            <Select
-              id="projectId"
-              name="projectId"
-              placeholder="No project"
-              options={visibleProjects}
-            />
-          </Field>
-        </div>
-
-        {showDetail ? (
-          <div className="space-y-4 border-t border-line-subtle pt-5">
-            <Field label="What fought back" htmlFor="challenges" hint="Optional">
-              <textarea
-                id="challenges"
-                name="challenges"
-                rows={3}
-                placeholder="The part that was harder than it should have been."
-                className="w-full rounded-control border border-line bg-surface px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint hover:border-line-strong"
-              />
-            </Field>
-            <Field
-              label="Impact"
-              htmlFor="impact"
-              hint="This is what resumes are made of"
+          {!showDetail ? (
+            <button
+              type="button"
+              onClick={() => setShowDetail(true)}
+              className="flex items-center gap-1 font-semibold text-fg-subtle hover:text-fg"
             >
-              <textarea
-                id="impact"
-                name="impact"
-                rows={3}
-                placeholder="What changed because of it? Numbers if you have them."
-                className="w-full rounded-control border border-line bg-surface px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-fg-faint hover:border-line-strong"
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-[1fr_1fr_8rem]">
-              <Field label="Tech" htmlFor="techTags" hint="Comma separated">
-                <Input id="techTags" name="techTags" placeholder="postgres, react" />
-              </Field>
-              <Field label="Tags" htmlFor="tags" hint="Comma separated">
-                <Input id="tags" name="tags" placeholder="performance, incident" />
-              </Field>
-              <Field label="Minutes" htmlFor="minutesSpent" hint="Optional">
-                <Input
-                  id="minutesSpent"
-                  name="minutesSpent"
-                  type="number"
-                  min={0}
-                  max={1440}
-                  placeholder="90"
-                />
-              </Field>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowDetail(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-fg-subtle hover:text-fg"
-          >
-            <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.25} />
-            Add impact, challenges and tags
-          </button>
-        )}
+              <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.25} />
+              More
+            </button>
+          ) : null}
 
-        {state.error ? (
-          <p
-            role="alert"
-            className="flex items-start gap-2 rounded-control border border-danger-line/40 bg-danger-bg px-3 py-2.5 text-xs text-danger-fg"
-          >
-            <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            {state.error}
-          </p>
-        ) : null}
+          <span className="ml-auto hidden sm:block">
+            <kbd className="rounded-sm border border-line px-1.5 py-px font-sans text-[0.625rem] font-semibold">
+              ⌘↵
+            </kbd>{" "}
+            to save
+          </span>
+        </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-line-subtle px-5 py-3.5">
-        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-          Cancel
-        </Button>
-        <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? (
-            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.5} />
-          ) : (
-            <Check className="h-4 w-4" strokeWidth={2.5} />
-          )}
-          Save entry
-        </Button>
+      {/* ── Everything else ────────────────────────────────────────────── */}
+      {showDetail ? (
+        <div className="fx-rise space-y-4 border-t border-line-subtle p-4 sm:p-5">
+          <Field label="Detail" htmlFor="body" hint="Optional">
+            <textarea
+              id="body"
+              name="body"
+              rows={4}
+              placeholder="The version you would tell a colleague."
+              className={textarea}
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Where" htmlFor="companyId" hint="Optional">
+              <Select
+                id="companyId"
+                name="companyId"
+                value={companyId}
+                onChange={setCompanyId}
+                placeholder="Personal — not for an employer"
+                options={companies}
+              />
+            </Field>
+            <Field label="Project" htmlFor="projectId" hint="Optional">
+              <Select
+                id="projectId"
+                name="projectId"
+                placeholder="No project"
+                options={visibleProjects}
+              />
+            </Field>
+          </div>
+
+          <Field label="What fought back" htmlFor="challenges" hint="Optional">
+            <textarea
+              id="challenges"
+              name="challenges"
+              rows={2}
+              placeholder="The part that was harder than it should have been."
+              className={textarea}
+            />
+          </Field>
+
+          <Field
+            label="Impact"
+            htmlFor="impact"
+            hint="This is what resumes are made of"
+          >
+            <textarea
+              id="impact"
+              name="impact"
+              rows={2}
+              placeholder="What changed because of it? Numbers if you have them."
+              className={textarea}
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_1fr_7rem]">
+            <Field label="Tech" htmlFor="techTags" hint="Comma separated">
+              <Input id="techTags" name="techTags" placeholder="postgres, react" />
+            </Field>
+            <Field label="Tags" htmlFor="tags" hint="Comma separated">
+              <Input id="tags" name="tags" placeholder="performance, incident" />
+            </Field>
+            <Field label="Minutes" htmlFor="minutesSpent" hint="Optional">
+              <Input
+                id="minutesSpent"
+                name="minutesSpent"
+                type="number"
+                min={0}
+                max={1440}
+                placeholder="90"
+              />
+            </Field>
+          </div>
+        </div>
+      ) : (
+        // Keep the default company in the payload even when the detail panel
+        // has never been opened — otherwise a quick log silently loses it.
+        <input type="hidden" name="companyId" value={companyId} />
+      )}
+
+      {state.error ? (
+        <p
+          role="alert"
+          className="mx-4 mb-4 flex items-start gap-2 rounded-control border border-danger-line/40 bg-danger-bg px-3 py-2.5 text-xs text-danger-fg sm:mx-5"
+        >
+          <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+          {state.error}
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-between gap-2 border-t border-line-subtle px-4 py-3 sm:px-5">
+        <p className="text-xs text-fg-subtle">{meta.blurb}</p>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setOpen(false)}
+            aria-label="Close composer"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </Button>
+          <Button type="submit" variant="primary" size="sm" disabled={pending}>
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.5} />
+            ) : (
+              <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+            )}
+            Save
+          </Button>
+        </div>
       </div>
     </form>
   );

@@ -2,12 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { NotebookPen, SearchX } from "lucide-react";
 
-import {
-  countsByType,
-  listCompanies,
-  listEntries,
-  listProjects,
-} from "@/lib/journal/queries";
+import { countsByType, listEntries } from "@/lib/journal/queries";
+import { currentOrgId, listOrgs, listProjects } from "@/lib/career/queries";
 import { LOG_TYPES, logTypeMeta } from "@/lib/journal/types";
 import type { LogType } from "@/lib/db/schema";
 import { PageHeader } from "@/components/page-header";
@@ -33,13 +29,15 @@ export default async function JournalPage({
       : undefined;
 
   const filter = { type, q: params.q };
-  const [entries, counts, companies, projects] = await Promise.all([
-    listEntries(filter),
-    // Same filter, minus the type — so each chip counts its own matches.
-    countsByType(filter),
-    listCompanies(),
-    listProjects(),
-  ]);
+  const [entries, counts, companies, projects, currentCompany] =
+    await Promise.all([
+      listEntries(filter),
+      // Same filter, minus the type — so each chip counts its own matches.
+      countsByType(filter),
+      listOrgs(),
+      listProjects(),
+      currentOrgId(),
+    ]);
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
@@ -50,7 +48,11 @@ export default async function JournalPage({
         description="Everything that made you better at your job — what you shipped, what you learned, what went wrong, and the tricks worth keeping. A company is optional; plenty of this happens on a Sunday."
       />
 
-      <EntryComposer companies={companies} projects={projects} />
+      <EntryComposer
+        companies={companies}
+        projects={projects}
+        currentCompanyId={currentCompany}
+      />
 
       <Suspense fallback={<div className="h-24" />}>
         <div className="space-y-4">

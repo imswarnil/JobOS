@@ -3,6 +3,7 @@ import {
   NotebookPen,
   FileText,
   Briefcase,
+  Building2,
   Send,
   Settings,
   ShieldCheck,
@@ -55,6 +56,13 @@ export const NAV: NavGroup[] = [
         icon: NotebookPen,
         description:
           "Work, lessons, walls, tricks — everything that made you better.",
+      },
+      {
+        label: "Career setup",
+        href: "/setup",
+        icon: Building2,
+        description:
+          "Employers, clients, courses and projects — so logging is one line.",
       },
     ],
   },

@@ -1,0 +1,1 @@
+ALTER TABLE "work_log" ALTER COLUMN "body" DROP NOT NULL;

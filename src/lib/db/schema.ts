@@ -78,6 +78,21 @@ export const logType = pgEnum("log_type", [
   "win",
 ]);
 
+/**
+ * What kind of organisation an entry can be filed under.
+ *
+ * "Company" is the wrong word for half of them, but it is the table we have.
+ * A course provider and a client are the same shape as an employer — a name
+ * you attribute work to — so they share the row rather than getting tables of
+ * their own.
+ */
+export const orgKind = pgEnum("org_kind", [
+  "employer",
+  "client",
+  "education",
+  "personal",
+]);
+
 /** The application pipeline, in the order a role actually moves through it. */
 export const applicationStatus = pgEnum("application_status", [
   "found",
@@ -99,12 +114,22 @@ export const company = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     ...ownership,
     name: text("name").notNull(),
+    kind: orgKind("kind").notNull().default("employer"),
+    /**
+     * Where you are now. The composer defaults to it, which is the whole
+     * point — most entries belong to wherever you currently spend your days.
+     * Not unique-constrained: contracting two places at once is normal.
+     */
+    isCurrent: boolean("is_current").notNull().default(false),
+    role: text("role"),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
     notes: text("notes"),
     ...timestamps,
   },
   (t) => [
     index("company_owner_idx").on(t.ownerId),
-    // One company name per person, not per instance.
+    // One name per person, not per instance.
     uniqueIndex("company_owner_name_idx").on(t.ownerId, t.name),
   ],
 );
@@ -147,10 +172,14 @@ export const workLog = pgTable(
     /** A one-line headline. What you would say if someone asked. */
     title: text("title").notNull(),
     /**
-     * The entry itself. Prose, not a taxonomy — you should be able to write it
-     * in the two minutes you actually have.
+     * The entry itself. Prose, not a taxonomy.
+     *
+     * Nullable on purpose: the fastest useful log is a headline and nothing
+     * else. Requiring a body would mean the difference between capturing a
+     * thought and losing it, and a title-only entry is worth infinitely more
+     * than the entry you did not write.
      */
-    body: text("body").notNull(),
+    body: text("body"),
     /** Null for anything personal: a side project, a course, a book. */
     companyId: uuid("company_id").references(() => company.id, {
       onDelete: "set null",
@@ -310,4 +339,5 @@ export type NewJob = typeof job.$inferInsert;
 export type Application = typeof application.$inferSelect;
 export type NewApplication = typeof application.$inferInsert;
 export type ApplicationStatus = (typeof applicationStatus.enumValues)[number];
+export type OrgKind = (typeof orgKind.enumValues)[number];
 export type LogType = (typeof logType.enumValues)[number];

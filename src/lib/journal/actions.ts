@@ -45,7 +45,8 @@ const entrySchema = z.object({
   type: z.enum(["work", "learning", "challenge", "trick", "setback", "win"]),
   occurredOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date."),
   title: z.string().trim().min(1, "Give the entry a title.").max(200),
-  body: z.string().trim().min(1, "Write at least a sentence."),
+  /** Optional: a quick log is a headline and nothing else. */
+  body: z.string().trim().max(20000).optional(),
   challenges: z.string().trim().max(4000).optional(),
   impact: z.string().trim().max(4000).optional(),
   companyId: z.uuid().optional(),
@@ -62,7 +63,7 @@ export async function createEntryAction(
     type: formData.get("type"),
     occurredOn: formData.get("occurredOn"),
     title: formData.get("title"),
-    body: formData.get("body"),
+    body: (formData.get("body") as string)?.trim() || undefined,
     challenges: (formData.get("challenges") as string)?.trim() || undefined,
     impact: (formData.get("impact") as string)?.trim() || undefined,
     companyId: optionalId(formData.get("companyId")),

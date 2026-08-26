@@ -103,27 +103,10 @@ export async function countsByType(
   return Object.fromEntries(rows.map((r) => [r.type, Number(r.n)]));
 }
 
-export async function listCompanies() {
-  const db = getDb();
-  const owner = await ownerId();
-
-  return db
-    .select({ id: company.id, name: company.name })
-    .from(company)
-    .where(eq(company.ownerId, owner))
-    .orderBy(company.name);
-}
-
-export async function listProjects() {
-  const db = getDb();
-  const owner = await ownerId();
-
-  return db
-    .select({ id: project.id, name: project.name, companyId: project.companyId })
-    .from(project)
-    .where(eq(project.ownerId, owner))
-    .orderBy(project.name);
-}
+/*
+ * Company and project lookups moved to lib/career/queries — they are about
+ * career setup rather than the journal, and both screens need them.
+ */
 
 /**
  * The dashboard's numbers.

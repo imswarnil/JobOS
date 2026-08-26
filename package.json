@@ -11,7 +11,7 @@
     "vercel:env": "./scripts/vercel-env.sh",
     "db:check": "node scripts/check.mjs",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "drizzle-kit migrate && node scripts/apply-sql.mjs drizzle/manual/*.sql",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "node scripts/seed.mjs"
