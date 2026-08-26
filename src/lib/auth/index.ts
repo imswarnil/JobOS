@@ -1,82 +1,76 @@
+import { redirect } from "next/navigation";
+
+import { auth } from "@/lib/auth/server";
+
 /**
- * AUTH SEAM
- * =========
+ * WHO IS ASKING
+ * =============
  *
- * Phase 0 ships no authentication. Every screen is open, and `getCurrentUser()`
- * returns a fixed placeholder. That is deliberate: it lets the whole shell be
- * designed and reviewed without a database or an identity provider in play.
+ * The single place the rest of the app learns about the current user. Every
+ * screen and every server action goes through here, so there is exactly one
+ * definition of "signed in" to reason about.
  *
- * The important part is that the *shape* is already right. Nothing in the app
- * reads a user from anywhere else, so turning auth on is a change to this file
- * and nothing else.
- *
- * ── The plan: Neon Auth ──────────────────────────────────────────────────────
- * Neon Auth (Neon's built-in authentication, powered by Stack Auth) is the
- * chosen provider precisely because it keeps identity *inside* the same
- * Postgres as the domain data. Neon provisions and continuously syncs a
- * `neon_auth.users_sync` table, which means:
- *
- *   - No adapter tables to maintain (no `accounts` / `sessions` /
- *     `verification_tokens` of our own — Neon owns those).
- *   - `owner_id` foreign keys resolve inside the database, so a join from a
- *     work log to its owner is an ordinary SQL join, not an API call.
- *   - One vendor, one connection string, one dashboard.
- *
- * Wiring it up, when we get there:
- *   1. Enable Auth in the Neon console; it hands back the three NEXT_PUBLIC_
- *      Stack keys and a secret key (see .env.example).
- *   2. `pnpm add @stackframe/stack` and mount its handler route.
- *   3. Replace the body of `getCurrentUser()` below with the real session read.
- *   4. Turn `requireUser()` back into an actual redirect.
- *   5. Point `users` in the schema at `neon_auth.users_sync` (see lib/db/schema.ts).
- *
- * TODO(Phase 1): do the five steps above.
+ * Backed by Neon Auth (Better Auth, hosted by Neon). See lib/auth/server.ts.
  */
 
 export interface CurrentUser {
-  /** Matches `neon_auth.users_sync.id` once Neon Auth is live. */
+  /** `neon_auth.user.id` — the same uuid our `owner_id` columns point at. */
   id: string;
   name: string;
   email: string;
+  image: string | null;
   /** Derived, not stored — used by the avatar. */
   initials: string;
   /**
-   * Phase 0 has no roles. Kept on the type so the Admin screen can start
-   * gating on it the moment there is more than one user.
-   * TODO(Phase 6): move to a real role column / organization membership.
+   * Better Auth's admin plugin writes this. Null for ordinary accounts; the
+   * Admin screen gates on it.
    */
-  role: "owner" | "member";
+  role: string | null;
 }
 
-/** The stand-in identity every screen renders against until auth is real. */
-const PLACEHOLDER_USER: CurrentUser = {
-  id: "00000000-0000-0000-0000-000000000001",
-  name: "Swarnil Singhai",
-  email: "swarnilsinghaicse@gmail.com",
-  initials: "SS",
-  role: "owner",
-};
+/** "Swarnil Singhai" → "SS"; "demo@jobos.app" → "DE". */
+function initialsOf(name: string, email: string): string {
+  const source = name?.trim() || email;
+  const words = source.split(/[\s._-]+/).filter(Boolean);
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return source.slice(0, 2).toUpperCase();
+}
 
 /**
- * The only sanctioned way to learn who is asking.
+ * Returns the signed-in user, or null.
  *
- * Async from day one even though the placeholder is synchronous — every call
- * site is already written to await it, so swapping in the real session read
- * does not ripple outwards.
+ * Any server component calling this must opt out of static rendering — it
+ * reads cookies, so a prerendered page would bake in one visitor's session.
+ * Use `export const dynamic = "force-dynamic"`.
  */
-export async function getCurrentUser(): Promise<CurrentUser> {
-  // TODO(Phase 1): replace with the Neon Auth session read, e.g.
-  //   const user = await stackServerApp.getUser();
-  //   if (!user) return null;
-  return PLACEHOLDER_USER;
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const { data } = await auth.getSession();
+  const user = data?.user;
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image ?? null,
+    initials: initialsOf(user.name, user.email),
+    role: (user as { role?: string | null }).role ?? null,
+  };
 }
 
 /**
- * Use this in any layout or page that must not render for a signed-out
- * visitor. It is a no-op today so the whole app stays browsable without
- * credentials — but the call sites are already in place.
+ * The guard for anything behind the sign-in wall. Redirects rather than
+ * throwing, so a signed-out visitor lands somewhere useful.
+ *
+ * Route protection lives here rather than in middleware on purpose: the
+ * public homepage, the auth screens and the app shell have genuinely
+ * different rules, and a layout-level call states that plainly instead of
+ * encoding it in a matcher regex.
  */
 export async function requireUser(): Promise<CurrentUser> {
-  // TODO(Phase 1): if (!user) redirect("/login");
-  return getCurrentUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return user;
 }

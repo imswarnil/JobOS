@@ -1,7 +1,8 @@
 CREATE TYPE "public"."application_status" AS ENUM('found', 'tailored', 'applied', 'interview', 'offer', 'rejected', 'skipped');--> statement-breakpoint
+CREATE TYPE "public"."log_type" AS ENUM('work', 'learning', 'challenge', 'trick', 'setback', 'win');--> statement-breakpoint
 CREATE TABLE "application" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"job_id" uuid NOT NULL,
 	"resume_version_id" uuid,
 	"status" "application_status" DEFAULT 'applied' NOT NULL,
@@ -13,7 +14,7 @@ CREATE TABLE "application" (
 --> statement-breakpoint
 CREATE TABLE "company" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"name" text NOT NULL,
 	"notes" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -22,7 +23,7 @@ CREATE TABLE "company" (
 --> statement-breakpoint
 CREATE TABLE "job" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"source" text NOT NULL,
 	"external_id" text,
 	"title" text NOT NULL,
@@ -38,7 +39,7 @@ CREATE TABLE "job" (
 --> statement-breakpoint
 CREATE TABLE "job_criteria" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"title" text NOT NULL,
 	"keywords" text[] DEFAULT '{}' NOT NULL,
 	"location" text,
@@ -51,7 +52,7 @@ CREATE TABLE "job_criteria" (
 --> statement-breakpoint
 CREATE TABLE "project" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"company_id" uuid,
 	"name" text NOT NULL,
 	"description" text,
@@ -63,7 +64,7 @@ CREATE TABLE "project" (
 --> statement-breakpoint
 CREATE TABLE "resume_master" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"data" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -71,7 +72,7 @@ CREATE TABLE "resume_master" (
 --> statement-breakpoint
 CREATE TABLE "resume_version" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
+	"owner_id" uuid NOT NULL,
 	"job_id" uuid,
 	"label" text NOT NULL,
 	"data" jsonb DEFAULT '{}'::jsonb NOT NULL,
@@ -81,11 +82,13 @@ CREATE TABLE "resume_version" (
 --> statement-breakpoint
 CREATE TABLE "work_log" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
-	"date" date NOT NULL,
+	"owner_id" uuid NOT NULL,
+	"type" "log_type" DEFAULT 'work' NOT NULL,
+	"occurred_on" date NOT NULL,
+	"title" text NOT NULL,
+	"body" text NOT NULL,
 	"company_id" uuid,
 	"project_id" uuid,
-	"tasks" text NOT NULL,
 	"challenges" text,
 	"impact" text,
 	"tech_tags" text[] DEFAULT '{}' NOT NULL,
@@ -113,5 +116,6 @@ CREATE INDEX "project_company_idx" ON "project" USING btree ("company_id");--> s
 CREATE UNIQUE INDEX "resume_master_owner_idx" ON "resume_master" USING btree ("owner_id");--> statement-breakpoint
 CREATE INDEX "resume_version_owner_idx" ON "resume_version" USING btree ("owner_id");--> statement-breakpoint
 CREATE INDEX "resume_version_job_idx" ON "resume_version" USING btree ("job_id");--> statement-breakpoint
-CREATE INDEX "work_log_owner_date_idx" ON "work_log" USING btree ("owner_id","date");--> statement-breakpoint
+CREATE INDEX "work_log_owner_date_idx" ON "work_log" USING btree ("owner_id","occurred_on");--> statement-breakpoint
+CREATE INDEX "work_log_owner_type_idx" ON "work_log" USING btree ("owner_id","type");--> statement-breakpoint
 CREATE INDEX "work_log_project_idx" ON "work_log" USING btree ("project_id");

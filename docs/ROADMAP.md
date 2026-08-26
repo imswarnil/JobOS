@@ -9,7 +9,7 @@ Update that file and this one together.
 
 ---
 
-## Phase 0 — Foundation & skeleton `in progress`
+## Phase 0 — Foundation & skeleton ✅ shipped
 
 The shell, the design language, and the seams every later phase plugs into.
 
@@ -25,15 +25,23 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Provider stubs: LLM, job sources, PDF export
 - [x] `.env.example`, docs, README
 
-## Phase 1 — Work Journal
+## Phase 1 — Work Journal `in progress`
 
-- [ ] Turn on Neon Auth; replace the placeholder in `lib/auth/index.ts`
-- [ ] Apply the migration; add the `owner_id` foreign keys (see `DATABASE.md`)
-- [ ] Make `requireUser()` an actual redirect
-- [ ] Work log CRUD — tasks, challenges, tech, impact, minutes
-- [ ] Companies and projects
-- [ ] Timeline view with filters and full-text search
-- [ ] Streaks and weekly summaries on the dashboard
+- [x] Neon Auth enabled; real accounts, sessions and sign-out
+- [x] Migration applied; `owner_id` foreign keys to `neon_auth.user`
+- [x] `requireUser()` redirects — every `(app)` route is gated
+- [x] Six log types: work, learning, challenge, trick, setback, win
+- [x] A company is optional on every entry — personal logs are first-class
+- [x] Entry composer with a prompt per type
+- [x] Filter by kind, with counts, in the URL
+- [x] Create and delete, as server actions
+- [x] Streaks and weekly counts on the dashboard (streak computed in SQL)
+- [x] Seeded demo account with 15 entries across all six types
+- [x] Public homepage
+- [ ] Edit an existing entry
+- [ ] Full-text search across the journal
+- [ ] Manage companies and projects from the UI
+- [ ] Weekly summary digest
 - [ ] Export everything as JSON from Settings
 
 ## Phase 2 — Resume Builder
@@ -71,9 +79,13 @@ The shell, the design language, and the seams every later phase plugs into.
 
 ## Phase 6 — Stretch
 
-- [ ] Organizations and teams — add `organization_id` to the shared `ownership`
-      column set in `schema.ts`, and widen `scope()` to return it
-- [ ] Role checks (the Admin screen gate)
+- [ ] Organizations and teams — Neon Auth already ships the Better Auth
+      organization plugin (`neon_auth.organization` / `member` exist and are
+      enabled), so this is reading a tenancy layer that is already there:
+      widen `scope()` to return `organizationId` from
+      `session.activeOrganizationId`
+- [ ] Role checks — `neon_auth.user.role` exists and `CurrentUser.role`
+      already reads it; the Admin screen gate is one line
 - [ ] Billing and plans
 - [ ] Autonomous apply experiments
 - [ ] Public API

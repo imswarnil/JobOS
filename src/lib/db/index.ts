@@ -7,16 +7,14 @@ import * as schema from "@/lib/db/schema";
  * The database client.
  *
  * `neon-http` rather than the WebSocket pool: every JobOS query is a short,
- * self-contained request, which is exactly what the HTTP driver is fastest
- * at, and it works unchanged on Vercel's edge and Node runtimes.
+ * self-contained request, which is what the HTTP driver is fastest at, and it
+ * works unchanged on both the Node and edge runtimes.
  *
- * Nothing calls this in Phase 0 — no screen touches the database yet. It is
- * here so that the first feature query has somewhere to import from, and so
- * that a missing DATABASE_URL fails loudly at that point rather than
- * silently returning nothing.
+ * Uses the *pooled* connection string. Migrations deliberately use the direct
+ * one instead — see drizzle.config.ts.
  *
- * TODO(Phase 4): if a batch import ever needs a transaction, swap to
- * `drizzle-orm/neon-serverless` with a Pool — the query code does not change.
+ * TODO(Phase 4): if a batch import ever needs a real transaction, swap to
+ * `drizzle-orm/neon-serverless` with a Pool. The query code does not change.
  */
 function connectionString(): string {
   const url = process.env.DATABASE_URL;
@@ -30,8 +28,7 @@ function connectionString(): string {
 
 /**
  * Lazily constructed: reading the env var at module scope would break the
- * build, because Next evaluates imported modules while prerendering and there
- * is no database configured yet.
+ * build, because Next evaluates imported modules while prerendering.
  */
 let client: ReturnType<typeof drizzle<typeof schema>> | undefined;
 

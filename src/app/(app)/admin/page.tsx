@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { AlertTriangle, Database, KeyRound, ShieldCheck, Users } from "lucide-react";
+import { AlertTriangle, Database, KeyRound, NotebookPen, ShieldCheck, Users } from "lucide-react";
 
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { instanceStats, listUsers } from "@/lib/admin/queries";
 import { PHASES } from "@/lib/phases";
+import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatTile } from "@/components/stat-tile";
 import { Badge } from "@/components/ui/badge";
@@ -15,33 +17,42 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Admin" };
+export const dynamic = "force-dynamic";
 
 /**
  * The operator's view of the instance.
  *
- * Deliberately ungated in Phase 0 — there is one user and no roles, so a
- * check would be theatre. `user.role` already exists on the type, so the gate
- * is a one-line addition the day a second account can exist.
+ * Every query on this page is instance-wide rather than owner-scoped, which
+ * makes the route itself the security boundary. It is currently reachable by
+ * any signed-in account — acceptable while this is a personal instance with a
+ * demo login, and called out in the banner rather than hidden.
  *
- * TODO(Phase 6): if (user.role !== "owner") notFound();
+ * TODO(Phase 6): gate on the role Better Auth already stores —
+ *   if (user.role !== "admin") notFound();
+ * The column exists (`neon_auth.user.role`) and `CurrentUser.role` reads it.
  */
 export default async function AdminPage() {
-  const user = await getCurrentUser();
+  const [user, stats, users] = await Promise.all([
+    requireUser(),
+    instanceStats(),
+    listUsers(),
+  ]);
+
   const shipped = PHASES.filter((p) => p.status === "shipped").length;
 
   const services = [
     {
       name: "Neon Postgres",
-      detail: "Domain data and identity, one connection string",
-      status: "Not connected",
-      tone: "warning" as const,
+      detail: "Domain data — 8 tables in `public`",
+      status: "Connected",
+      tone: "success" as const,
       icon: Database,
     },
     {
-      name: "Neon Auth",
-      detail: "Users sync into neon_auth.users_sync",
-      status: "Not connected",
-      tone: "warning" as const,
+      name: "Neon Auth (Better Auth)",
+      detail: "Users and sessions in `neon_auth`, same database",
+      status: "Connected",
+      tone: "success" as const,
       icon: KeyRound,
     },
     {
@@ -64,8 +75,8 @@ export default async function AdminPage() {
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <PageHeader
         title="Admin"
-        description="What this instance is running, what it is connected to, and how much of the build is done."
-        eyebrow={<Badge tone="special">Owner only</Badge>}
+        description="What this instance is running, who is on it, and how much of the build is done."
+        eyebrow={<Badge tone="special">Instance</Badge>}
       />
 
       <div className="flex items-start gap-2.5 rounded-control border border-warning-line/40 bg-warning-bg px-3.5 py-3">
@@ -74,33 +85,81 @@ export default async function AdminPage() {
           strokeWidth={2}
         />
         <p className="text-xs leading-relaxed text-warning-fg">
-          This screen is not access-controlled yet. JobOS has exactly one user
-          in Phase 0, so there is nothing to protect it from — the role check
-          goes in when accounts become real.
+          Reachable by any signed-in account, including the demo login. Neon
+          Auth already stores a role on every user, so the gate is a one-line
+          change — it goes in when this instance stops being personal.
         </p>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
           label="Accounts"
-          value={1}
-          hint="Single-user instance."
+          value={stats.users}
+          hint="Rows in neon_auth.user."
           icon={Users}
           tone="accent"
         />
         <StatTile
-          label="Phases shipped"
-          value={`${shipped}/${PHASES.length}`}
-          hint="Phase 0 is in progress."
-          icon={ShieldCheck}
+          label="Active sessions"
+          value={stats.activeSessions}
+          hint="Unexpired, server-side."
+          icon={KeyRound}
         />
         <StatTile
-          label="Domain rows"
-          value={0}
-          hint="No database connected."
-          icon={Database}
+          label="Journal entries"
+          value={stats.workLogs}
+          hint="Across every account."
+          icon={NotebookPen}
+          tone="craft"
+        />
+        <StatTile
+          label="Phases shipped"
+          value={`${shipped}/${PHASES.length}`}
+          hint="Phase 1 is in progress."
+          icon={ShieldCheck}
         />
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Accounts</CardTitle>
+          <CardDescription>
+            Every account on this instance, with how much each has logged.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <table className="w-full min-w-[34rem] text-sm">
+            <thead>
+              <tr className="border-b border-line-subtle text-left">
+                <th className="t-slate pb-2 font-semibold">Name</th>
+                <th className="t-slate pb-2 font-semibold">Email</th>
+                <th className="t-slate pb-2 text-right font-semibold">Entries</th>
+                <th className="t-slate pb-2 text-right font-semibold">Joined</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line-subtle">
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td className="py-2.5 font-medium text-fg">
+                    <span className="flex items-center gap-2">
+                      {u.name}
+                      {u.id === user.id ? <Badge>You</Badge> : null}
+                      {u.role ? <Badge tone="special">{u.role}</Badge> : null}
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-fg-muted">{u.email}</td>
+                  <td className="t-num py-2.5 text-right text-fg-muted">
+                    {u.logCount}
+                  </td>
+                  <td className="t-num py-2.5 text-right text-fg-subtle">
+                    {formatDate(u.createdAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -115,10 +174,7 @@ export default async function AdminPage() {
               key={s.name}
               className="flex items-center gap-3 rounded-control border border-line-subtle px-3 py-3"
             >
-              <s.icon
-                className="h-4 w-4 shrink-0 text-fg-faint"
-                strokeWidth={1.75}
-              />
+              <s.icon className="h-4 w-4 shrink-0 text-fg-faint" strokeWidth={1.75} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[0.8125rem] font-medium text-fg">
                   {s.name}
@@ -133,10 +189,10 @@ export default async function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Session</CardTitle>
+          <CardTitle>Your session</CardTitle>
           <CardDescription>
             What <code className="font-mono text-[0.75em]">getCurrentUser()</code>{" "}
-            currently returns.
+            returned for this request.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -145,8 +201,8 @@ export default async function AdminPage() {
               ["User ID", user.id],
               ["Name", user.name],
               ["Email", user.email],
-              ["Role", user.role],
-              ["Source", "Placeholder — lib/auth/index.ts"],
+              ["Role", user.role ?? "— (no role set)"],
+              ["Source", "Neon Auth · neon_auth.user"],
             ].map(([k, v]) => (
               <div key={k} className="flex gap-4 py-2.5">
                 <dt className="w-28 shrink-0 text-fg-subtle">{k}</dt>

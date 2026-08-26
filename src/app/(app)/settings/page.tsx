@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Bot, Braces, Database, Download, Palette, Trash2, User } from "lucide-react";
 
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { Avatar } from "@/components/shell/user-menu";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Settings" };
+export const dynamic = "force-dynamic";
 
 /**
  * Settings is a "now" screen rather than a phase placeholder — the appearance
@@ -26,7 +27,7 @@ export const metadata: Metadata = { title: "Settings" };
  * hiding it.
  */
 export default async function SettingsPage() {
-  const user = await getCurrentUser();
+  const user = await requireUser();
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -113,7 +114,7 @@ export default async function SettingsPage() {
               name: "Neon Postgres",
               detail: "Database and authentication",
               icon: Database,
-              phase: "Phase 1",
+              phase: "Connected",
             },
             {
               name: "Google Gemini",
@@ -148,7 +149,9 @@ export default async function SettingsPage() {
                 </p>
                 <p className="truncate text-xs text-fg-subtle">{row.detail}</p>
               </div>
-              <Badge>{row.phase}</Badge>
+              <Badge tone={row.phase === "Connected" ? "success" : "neutral"}>
+                {row.phase}
+              </Badge>
             </div>
           ))}
         </CardContent>

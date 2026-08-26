@@ -5,13 +5,11 @@ import Link from "next/link";
 import { ChevronsUpDown, LogOut, Settings, ShieldCheck, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/lib/auth";
+import { signOutAction } from "@/lib/auth/actions";
 
 /**
  * A plain popover rather than a headless-UI dependency — the shell needs one
  * menu, and one menu is not worth a component library.
- *
- * TODO(Phase 1): "Sign out" currently just walks to /login. Once Neon Auth is
- * wired it should call the real sign-out and clear the session cookie.
  */
 export function UserMenu({ user }: { user: CurrentUser }) {
   const [open, setOpen] = React.useState(false);
@@ -85,15 +83,16 @@ export function UserMenu({ user }: { user: CurrentUser }) {
             </Link>
           ))}
           <div className="my-1.5 h-px bg-line-subtle" />
-          <Link
-            href="/login"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-control px-2.5 py-2 text-[0.8125rem] text-danger-fg transition-colors duration-200 ease-out hover:bg-danger-bg"
-          >
-            <LogOut className="h-4 w-4" strokeWidth={1.75} />
-            Sign out
-          </Link>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              role="menuitem"
+              className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-2 text-left text-[0.8125rem] text-danger-fg transition-colors duration-200 ease-out hover:bg-danger-bg"
+            >
+              <LogOut className="h-4 w-4" strokeWidth={1.75} />
+              Sign out
+            </button>
+          </form>
         </div>
       ) : null}
     </div>

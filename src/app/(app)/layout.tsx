@@ -2,14 +2,14 @@ import { requireUser } from "@/lib/auth";
 import { AppShell } from "@/components/shell/app-shell";
 
 /**
- * The protected area — except that in Phase 0 it protects nothing.
- * `requireUser()` is deliberately a no-op that returns the placeholder user,
- * so every screen is browsable without credentials while the shell is being
- * designed. The call site is already correct; only the helper changes.
+ * The signed-in area. `requireUser()` redirects to /login when there is no
+ * session, so nothing below this layout ever renders for a stranger.
  *
- * TODO(Phase 1): once Neon Auth is live, `requireUser()` redirects to /login
- * and this file needs no edit at all.
+ * Dynamic because the session is read from cookies — prerendering this would
+ * bake one visitor's account into the static output.
  */
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: {

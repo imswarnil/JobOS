@@ -1,4 +1,5 @@
 allowBuilds:
-  esbuild: true
+  esbuild: true      # drizzle-kit bundles drizzle.config.ts with it
+  core-js: false     # postinstall only prints a funding banner
   sharp: false
   unrs-resolver: false

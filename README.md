@@ -4,14 +4,25 @@ A career operating system. Log the work, build the resume, tailor it to the
 role, track every application — one system instead of four half-remembered
 ones.
 
+**Live:** [job.imswarnil.com](https://job.imswarnil.com) ·
+**Demo:** click *Explore the demo account* — no sign-up, a real account with a
+journal already in it.
+
 Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for what lands when.
 
-**Status: Phase 0 — foundation and skeleton.** The shell is real; the features
-are not. Every screen renders, nothing persists, and authentication is
-deliberately switched off so the whole app is browsable without credentials.
-
 ---
+
+## Status
+
+| Phase | | |
+| --- | --- | --- |
+| **0 · Foundation** | ✅ shipped | Design language, app shell, schema, seams |
+| **1 · Work Journal** | 🔨 in progress | Real accounts, six log types, entry CRUD |
+| 2 · Resume Builder | planned | Master resume, ATS PDF |
+| 3 · JD tailoring | planned | Gemini rewrite from real facts |
+| 4–5 · Jobs & agent | planned | Public job APIs, pipeline, scheduled agent |
+| 6 · Stretch | planned | Teams, billing |
 
 ## Stack
 
@@ -21,16 +32,16 @@ deliberately switched off so the whole app is browsable without credentials.
 | Styling | Tailwind CSS v4, hand-rolled components |
 | Type | Figtree |
 | Database | Neon Postgres via Drizzle ORM + `@neondatabase/serverless` |
-| Auth | Neon Auth — *planned, not yet wired* |
-| Validation | Zod + React Hook Form |
+| Auth | Neon Auth — Better Auth, hosted by Neon |
+| Validation | Zod, server actions |
 | Icons | Lucide |
 | Package manager | pnpm |
-| Deploy target | Vercel |
+| Hosting | Vercel |
 
-**Database and auth are the same vendor on purpose.** Neon Auth syncs users
-into a `neon_auth.users_sync` table inside the same Postgres, so `owner_id` is
-an ordinary foreign key rather than a call to someone else's API — and there
-are no adapter tables to maintain. See [`docs/DATABASE.md`](docs/DATABASE.md).
+**Database and auth are the same vendor on purpose.** Neon Auth writes its
+tables into the `neon_auth` schema of the same Postgres, so `owner_id` is an
+ordinary foreign key rather than a call to someone else's API — and there are
+no adapter tables to maintain. See [`docs/DATABASE.md`](docs/DATABASE.md).
 
 ## Design
 
@@ -45,34 +56,60 @@ then semantic aliases. **Components may only use the aliases.** A
 `text-fg-muted` and `border-line` resolve correctly in both themes from one set
 of classes. Adding a colour means adding an alias and one bridge line.
 
-## Getting started
+Vermilion is the record light. It marks the live thing — the active nav item,
+the primary action, the phase in progress. If three things on a screen are
+accent-coloured, two of them are wrong.
+
+## Running it
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:3000
+cp .env.example .env.local     # then fill it in — see below
+pnpm dev                       # http://localhost:3000
 ```
 
-That is genuinely all Phase 0 needs — no database, no keys. The app boots,
-every route renders, and the theme toggle works.
-
-## When you're ready for real data (Phase 1)
+JobOS needs a real database and a real auth instance; there is no offline mode.
+Both come from one Neon project, and every value in `.env.local` can be
+produced from the CLI:
 
 ```bash
-cp .env.example .env.local     # paste your Neon pooled connection string
-pnpm db:migrate                # apply drizzle/0000_phase_0_foundation.sql
+npx neonctl neon-auth enable --project-id <id> --branch <branch>
+npx neonctl connection-string production --project-id <id> --pooled
+npx neonctl connection-string production --project-id <id>
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Then follow [`docs/DATABASE.md`](docs/DATABASE.md) — it covers enabling Neon
-Auth, adding the ownership foreign keys, and replacing the placeholder session.
+Then apply the schema and seed the demo:
 
-To change the schema: edit `src/lib/db/schema.ts`, then `pnpm db:generate`.
-Never edit a generated migration that has already been applied.
+```bash
+pnpm db:migrate
+node scripts/apply-sql.mjs drizzle/0001_owner_foreign_keys.sql
+pnpm db:seed
+```
 
-## Deploying to Vercel
+[`docs/DATABASE.md`](docs/DATABASE.md) explains each step, including why the
+foreign keys are a separate file.
 
-Import the repository, set `DATABASE_URL` (and, later, the auth and model keys
-from `.env.example`) as environment variables, and deploy. No adapter or custom
-build command is needed. Everything currently prerenders as static.
+## Deploying
+
+Vercel, with no adapter and no custom build command.
+
+1. Import the repository at [vercel.com/new](https://vercel.com/new).
+2. Set the environment variables from `.env.example` — at minimum
+   `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `NEON_AUTH_BASE_URL` and
+   `NEON_AUTH_COOKIE_SECRET`. Add `DEMO_EMAIL` / `DEMO_PASSWORD` to enable the
+   demo button.
+3. Add the domain, and point DNS at Vercel.
+4. **Register the origin with Neon Auth**, or sign-in will fail in production
+   while working locally:
+
+   ```bash
+   npx neonctl neon-auth domain add https://job.imswarnil.com \
+     --project-id <id> --branch <branch>
+   ```
+
+Every route that reads a session is `force-dynamic`; nothing user-specific is
+prerendered.
 
 ## Folder structure
 
@@ -81,55 +118,50 @@ src/
 ├── app/
 │   ├── layout.tsx              Figtree, metadata, pre-paint theme script
 │   ├── globals.css             design tokens → Tailwind bridge → base → utilities
-│   ├── (auth)/                 unauthenticated screens
-│   │   ├── layout.tsx          split shell: form left, pitch right
-│   │   ├── login/
-│   │   └── signup/
-│   └── (app)/                  the application
-│       ├── layout.tsx          calls requireUser(), renders the shell
-│       ├── dashboard/          welcome, stats, roadmap
-│       ├── journal/            P1 placeholder
-│       ├── resume/             P2 placeholder
-│       ├── jobs/               P4 placeholder
-│       ├── applications/       P4 placeholder
-│       ├── settings/           live: theme; rest disabled
-│       └── admin/              live: instance and session state
+│   ├── page.tsx                public homepage — the pitch, the story, the stack
+│   ├── (auth)/                 sign-in and sign-up
+│   ├── (app)/                  signed-in area — requireUser() guards the layout
+│   │   ├── dashboard/          real stats, streak, latest entries
+│   │   ├── journal/            ✅ six log types, composer, filters
+│   │   ├── resume/             P2 placeholder
+│   │   ├── jobs/               P4 placeholder
+│   │   ├── applications/       P4 placeholder
+│   │   ├── settings/           profile, theme, integrations, data
+│   │   └── admin/              instance stats, accounts, services
+│   └── api/auth/[...path]/     proxies auth calls, owns the session cookie
 ├── components/
 │   ├── ui/                     button, card, badge, input
 │   ├── shell/                  sidebar, topbar, user menu, theme toggle
-│   ├── auth-form.tsx           login/signup form (unwired)
-│   ├── page-header.tsx
-│   ├── phase-placeholder.tsx   the screen every unbuilt route renders
-│   └── stat-tile.tsx
+│   ├── journal/                composer, entry card, type filter
+│   └── auth-form.tsx
 └── lib/
-    ├── auth/                   getCurrentUser() + scope() — the ownership seam
-    ├── db/                     Drizzle client, schema, Neon-managed identity
-    ├── llm/                    Gemini/Groq interface (P3 stub)
-    ├── jobs/                   JobSource interface + connectors (P4 stubs)
-    ├── resume/                 generatePdf() (P2 stub)
-    ├── nav.ts                  the sidebar, as data
-    ├── phases.ts               the roadmap, as data
-    └── utils.ts
-drizzle/                        generated SQL migrations
-docs/                           ABSTRACT · ROADMAP · DATABASE
+    ├── auth/                   server.ts · index.ts · actions.ts · scope.ts
+    ├── db/                     client, schema, Neon-managed identity
+    ├── journal/                types, queries, actions
+    ├── admin/                  instance-wide queries
+    ├── llm/ jobs/ resume/      P2–P4 stubs
+    ├── nav.ts phases.ts marketing.ts   the app, as data
+    └── theme.ts utils.ts
+drizzle/    generated migration + the hand-written FK migration
+scripts/    seed.mjs · apply-sql.mjs
+docs/       ABSTRACT · ROADMAP · DATABASE
 ```
 
 ## Conventions worth knowing
 
-**The nav and the roadmap are data.** `src/lib/nav.ts` and
-`src/lib/phases.ts` drive the sidebar, the placeholders, the dashboard roadmap
-and the auth aside. Adding a screen or shipping a phase is an edit to one of
-those files, not a sweep through templates.
-
 **Ownership is never implicit.** Domain queries go through `scope()` from
-`src/lib/auth/scope.ts`. There is one user today; that is exactly why the
-habit is worth having now.
+`src/lib/auth/scope.ts`, and `owner_id` is a real foreign key. The one
+exception is `src/lib/admin/queries.ts`, which is instance-wide by design.
 
-**`TODO(Phase N):`** marks every seam where future work plugs in. Grep for it:
+**The nav, the roadmap and the homepage are data.** `src/lib/nav.ts`,
+`src/lib/phases.ts` and `src/lib/marketing.ts` drive the sidebar, the phase
+badges, the placeholders and the landing page. Shipping a phase is an edit to
+one of those files, not a sweep through templates.
 
-```bash
-grep -rn "TODO(Phase" src/
-```
+**Writes are server actions.** No API routes for mutations; the owner comes
+from the session, never from the form.
+
+**`TODO(Phase N):`** marks every seam. `grep -rn "TODO(Phase" src/`
 
 ## Scripts
 
@@ -140,5 +172,10 @@ grep -rn "TODO(Phase" src/
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm db:generate` | generate a migration from the schema |
-| `pnpm db:migrate` | apply migrations (needs `DATABASE_URL`) |
+| `pnpm db:migrate` | apply migrations |
+| `pnpm db:seed` | create and populate the demo account |
 | `pnpm db:studio` | Drizzle Studio |
+
+## Licence
+
+MIT.

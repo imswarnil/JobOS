@@ -10,9 +10,13 @@ export default defineConfig({
   schema: "./src/lib/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    // Only read when you actually run push/migrate/studio — `generate` works
-    // offline from the schema file alone.
-    url: process.env.DATABASE_URL ?? "",
+    /**
+     * The direct (unpooled) endpoint. PgBouncer sits in front of the pooled
+     * host and does not reliably carry the session state that DDL and
+     * advisory locks need, so migrations go straight to the compute.
+     * `generate` needs neither — it works offline from the schema file.
+     */
+    url: process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL ?? "",
   },
   /**
    * Migrations cover `public` only. The `neon_auth` schema — and the

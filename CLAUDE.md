@@ -3,37 +3,66 @@
 # JobOS — working notes
 
 A career operating system: log the work, build the resume, tailor it to the
-role, track every application. See `docs/ABSTRACT.md` for the full premise and
+role, track every application. See `docs/ABSTRACT.md` for the premise and
 `docs/ROADMAP.md` for the phase plan. `idea.md` is the original brief.
 
-**Currently Phase 0.** The shell is real; the features are not. Read
-`docs/ROADMAP.md` before adding anything — work belongs to a phase.
+**Phase 0 shipped. Phase 1 in progress.** The journal is real; resume, jobs and
+applications are still placeholders. Read the roadmap before adding anything —
+work belongs to a phase.
 
 ## Ground rules
 
-**Authentication is deliberately off.** Every route is open and
-`getCurrentUser()` in `src/lib/auth/index.ts` returns a fixed placeholder. Do
-not "fix" this — it is how Phase 0 stays reviewable without a database. The
-whole swap is documented in that file and in `docs/DATABASE.md`.
+**Neon is the database *and* the auth provider.** Neon Auth is **Better Auth,
+hosted by Neon**, writing `user` / `session` / `account` into a `neon_auth`
+schema inside the same Postgres. Do not add Auth.js, NextAuth or an adapter.
 
-**Neon is both the database and the auth provider.** Neon Auth syncs users
-into `neon_auth.users_sync` inside the same Postgres, so `owner_id` is an
-ordinary foreign key. Do not add Auth.js, NextAuth or their adapter tables.
+> It used to be Stack Auth with a `users_sync` mirror table. It is not any
+> more. Anything referring to `users_sync` is stale.
 
 **`src/lib/db/neon-auth.ts` must never be re-exported from `schema.ts`.**
-drizzle-kit generates DDL for every table it can reach from the schema
+drizzle-kit generates DDL for every table reachable from the schema
 entrypoint, and a migration containing `CREATE SCHEMA "neon_auth"` collides
-with Neon's own provisioning. Keeping it unreachable is the safeguard.
+with Neon's own provisioning. `schemaFilter` does *not* prevent this — it
+filters introspection and `push`, not `generate`. Unreachability is the
+safeguard.
+
+**Two connection strings, two jobs.** `DATABASE_URL` is pooled and used at
+runtime; `DATABASE_URL_UNPOOLED` is direct and used by drizzle-kit, because
+PgBouncer does not reliably carry the session state DDL needs.
 
 **Domain queries are always owner-scoped.** Use `scope()` from
-`src/lib/auth/scope.ts`. There is one user; that is exactly why the habit
-matters now.
+`src/lib/auth/scope.ts`; `owner_id` is a real FK to `neon_auth.user.id`. The
+single exception is `src/lib/admin/queries.ts`, which is instance-wide by
+design — which is why the *route* is the boundary there.
 
-**Nav and roadmap are data, not markup.** `src/lib/nav.ts` drives the sidebar,
-the topbar title and the placeholders; `src/lib/phases.ts` drives every phase
-badge, the dashboard roadmap and the auth aside. Edit those, not templates.
+**Writes are server actions**, never API routes. The owner comes from the
+session, never from the form, and deletes carry the owner in the WHERE clause.
+
+**Any route reading a session needs `export const dynamic = "force-dynamic"`**
+or Next will prerender one visitor's account into static output.
+
+**Nav, roadmap and homepage are data**, not markup: `src/lib/nav.ts`,
+`src/lib/phases.ts`, `src/lib/marketing.ts`. Shipping a phase means editing
+`phases.ts`, not sweeping templates. The sidebar chip reads whichever phase has
+`status: "building"`.
+
+**Trusted origins.** Neon Auth rejects sign-in from unregistered origins.
+Localhost is allowed; every deployed origin needs
+`neonctl neon-auth domain add`. First thing to check when auth works locally
+and fails in production.
 
 **`TODO(Phase N):`** marks every seam. `grep -rn "TODO(Phase" src/`
+
+## The journal's shape
+
+Six log types — `work`, `learning`, `challenge`, `trick`, `setback`, `win` —
+defined in the `log_type` enum and given labels, icons, tones and composer
+prompts in `src/lib/journal/types.ts`. Adding a type means the enum (a
+migration), that file, and nothing else.
+
+`company_id` is nullable on `work_log` on purpose: plenty of what makes someone
+better happens nowhere near an employer, and a personal entry must not have to
+be filed under a job. The UI labels those "Personal".
 
 ## Design language
 
@@ -42,8 +71,7 @@ Frame & Signal — the same system as the rest of imswarnil.com
 consumed as a package, because this is a Tailwind app and that is a
 dependency-free CSS system.
 
-One departure: **JobOS runs a single typeface, Figtree.** Frame & Signal uses
-three (Space Grotesk / Inter / IBM Plex Mono). The mono "slate" voice survives
+One departure: **a single typeface, Figtree.** The mono "slate" voice survives
 as the `.t-slate` utility — uppercase, wide tracking, small.
 
 Tokens live at the top of `src/app/globals.css` in two tiers:
@@ -53,31 +81,34 @@ Tokens live at the top of `src/app/globals.css` in two tiers:
 2. **Semantic aliases** (`--bg-surface`, `--fg-muted`, `--accent`) — the only
    public names.
 
-A `@theme inline` block bridges tier 2 into Tailwind, which is what lets
-`bg-surface` / `text-fg-muted` / `border-line` work in both themes from one
-set of classes. **Adding a colour = one alias + one bridge line.** Never write
-a hex in a component, and never reach past an alias to a ramp step.
+A `@theme inline` block bridges tier 2 into Tailwind. **Adding a colour = one
+alias + one bridge line.** Never a hex in a component, never a ramp step.
 
-Vermilion (`--accent`) is the record light. It marks the live thing: the
-active nav item, the primary action, the phase in progress. It is not
-decoration — if three things on a screen are accent-coloured, two of them are
-wrong.
+Vermilion (`--accent`) is the record light: the active nav item, the primary
+action, the phase in progress. Three accent-coloured things on a screen means
+two are wrong.
 
 ## Commands
 
 ```bash
-pnpm dev            # localhost:3000 — no database or keys needed
+pnpm dev          # needs a real .env.local — there is no offline mode
 pnpm build
-pnpm typecheck      # tsc --noEmit
+pnpm typecheck    # tsc --noEmit
 pnpm lint
-pnpm db:generate    # after editing src/lib/db/schema.ts
-pnpm db:migrate     # needs DATABASE_URL
+pnpm db:generate  # after editing src/lib/db/schema.ts
+pnpm db:migrate
+pnpm db:seed      # demo account + 15 entries across all six types
 ```
 
-Both lint and typecheck must stay clean.
+Both lint and typecheck must stay clean. Two lint rules bite often:
+`react-hooks/set-state-in-effect` (adjust state during render instead — see
+`app-shell.tsx` and `entry-composer.tsx`) and unused args (prefix `_`).
 
-## Layout
+## Gotchas already paid for
 
-`src/app/(app)/` is the application, `src/app/(auth)/` the sign-in screens,
-`src/components/shell/` the sidebar and topbar, `src/lib/` everything that is
-not a component. Full tree in `README.md`.
+- `neonctl connection-string <branch>` needs the branch **before** the flags,
+  or it reports `Unknown command`.
+- Seeding through the auth API needs an `Origin` header Neon trusts.
+- Interpolating a Drizzle column into a raw `sql` correlated subquery silently
+  returns 0. Use a `leftJoin` + `groupBy`.
+- Lucide v1 dropped brand icons — the GitHub mark is inline SVG.

@@ -29,8 +29,8 @@ export default function AuthLayout({
 
         <footer className="flex h-16 shrink-0 items-center justify-between gap-4 px-6 text-xs text-fg-faint sm:px-10">
           <span>© {new Date().getFullYear()} Swarnil Singhai</span>
-          <Link href="/dashboard" className="hover:text-fg-muted">
-            Skip to the app →
+          <Link href="/" className="hover:text-fg-muted">
+            What is JobOS? →
           </Link>
         </footer>
       </div>

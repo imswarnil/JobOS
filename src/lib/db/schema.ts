@@ -26,17 +26,17 @@ import {
 
 const ownership = {
   /**
-   * Always `neon_auth.users_sync.id`.
+   * Always `neon_auth.user.id`.
    *
-   * Declared as a plain column rather than a Drizzle `.references()` because
-   * the target table is provisioned by Neon Auth, not by our migrations — you
-   * cannot add a foreign key to a table that does not exist yet, and in
-   * Phase 0 there is no database at all. The constraint is added by a
-   * follow-up migration once Auth is enabled; see docs/DATABASE.md.
+   * A plain column rather than a Drizzle `.references()`: the target table
+   * belongs to Neon Auth, and pointing Drizzle at it would drag the whole
+   * `neon_auth` schema into our generated migrations. The real FK constraint
+   * is added by `drizzle/0001_owner_foreign_keys.sql`, which runs after Auth
+   * has provisioned the table.
    *
-   * The join is still fully typed: import `usersSync` from lib/db/neon-auth.
+   * The join is still fully typed: import `authUser` from lib/db/neon-auth.
    */
-  ownerId: text("owner_id").notNull(),
+  ownerId: uuid("owner_id").notNull(),
 };
 
 const timestamps = {
@@ -52,6 +52,31 @@ const timestamps = {
 /* =============================================================================
    ENUMS
    ==========================================================================*/
+
+/**
+ * What kind of entry this is.
+ *
+ * A career record is not only "what I shipped". The things that actually make
+ * you better — a thing you learned, a wall you hit, a trick worth keeping —
+ * are the ones people forget fastest, and several of them happen outside any
+ * employer. So the journal takes all of them, and `company_id` stays nullable
+ * precisely so a personal entry does not have to be filed under a job.
+ *
+ *   work      what you built or shipped
+ *   learning  something you now understand that you did not before
+ *   challenge a problem you are in the middle of
+ *   trick     a technique worth keeping — the reason you keep a journal
+ *   setback   it went badly; write it down before you rationalise it
+ *   win       it went well; resumes are made of these
+ */
+export const logType = pgEnum("log_type", [
+  "work",
+  "learning",
+  "challenge",
+  "trick",
+  "setback",
+  "win",
+]);
 
 /** The application pipeline, in the order a role actually moves through it. */
 export const applicationStatus = pgEnum("application_status", [
@@ -116,15 +141,24 @@ export const workLog = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ...ownership,
-    /** The day the work happened, not the day it was written down. */
-    date: date("date").notNull(),
+    type: logType("type").notNull().default("work"),
+    /** The day it happened, not the day it was written down. */
+    occurredOn: date("occurred_on").notNull(),
+    /** A one-line headline. What you would say if someone asked. */
+    title: text("title").notNull(),
+    /**
+     * The entry itself. Prose, not a taxonomy — you should be able to write it
+     * in the two minutes you actually have.
+     */
+    body: text("body").notNull(),
+    /** Null for anything personal: a side project, a course, a book. */
     companyId: uuid("company_id").references(() => company.id, {
       onDelete: "set null",
     }),
     projectId: uuid("project_id").references(() => project.id, {
       onDelete: "set null",
     }),
-    tasks: text("tasks").notNull(),
+    /** What fought back. Mostly used by `work` and `challenge` entries. */
     challenges: text("challenges"),
     /** What changed because of it — the part resumes are actually made of. */
     impact: text("impact"),
@@ -135,7 +169,9 @@ export const workLog = pgTable(
   },
   (t) => [
     // The timeline query: this person's entries, newest first.
-    index("work_log_owner_date_idx").on(t.ownerId, t.date),
+    index("work_log_owner_date_idx").on(t.ownerId, t.occurredOn),
+    // The filtered timeline: "show me every trick I have learned".
+    index("work_log_owner_type_idx").on(t.ownerId, t.type),
     index("work_log_project_idx").on(t.projectId),
   ],
 );
@@ -274,3 +310,4 @@ export type NewJob = typeof job.$inferInsert;
 export type Application = typeof application.$inferSelect;
 export type NewApplication = typeof application.$inferInsert;
 export type ApplicationStatus = (typeof applicationStatus.enumValues)[number];
+export type LogType = (typeof logType.enumValues)[number];

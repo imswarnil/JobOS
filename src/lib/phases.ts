@@ -24,7 +24,7 @@ export const PHASES: Phase[] = [
     title: "Foundation & skeleton",
     summary:
       "The shell: design language, navigation, placeholder screens, database schema and the seams that later phases plug into.",
-    status: "building",
+    status: "shipped",
     deliverables: [
       "Frame & Signal design language on Figtree, light + dark",
       "App shell: sidebar, topbar, command bar, user menu",
@@ -38,13 +38,15 @@ export const PHASES: Phase[] = [
     id: "P1",
     title: "Work Journal",
     summary:
-      "Log daily work against a company and project. This becomes the source-of-truth career history everything else is generated from.",
-    status: "planned",
+      "Log daily work — and everything around it. Six kinds of entry, a company optional on all of them, because plenty of what makes you better happens nowhere near an employer.",
+    status: "building",
     deliverables: [
-      "Log CRUD with tasks, challenges, tech and impact",
+      "Neon Auth: real accounts, sessions and sign-out",
+      "Six log types: work, learning, challenge, trick, setback, win",
+      "Entry composer with per-type prompts",
+      "Filter by kind, with counts",
       "Companies and projects",
-      "Timeline view with filters and search",
-      "Streaks and weekly summaries",
+      "Streaks and weekly counts on the dashboard",
     ],
   },
   {

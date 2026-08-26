@@ -1,69 +1,112 @@
 # Database & auth — how the pieces fit
 
-JobOS uses **Neon** for both the database and authentication. That is a
-deliberate choice rather than a convenience: Neon Auth syncs the identity
-provider's users into a `neon_auth.users_sync` table **inside the same
-Postgres**, so "who owns this row" is answerable in SQL rather than over an
-API. There are no `accounts` / `sessions` / `verification_tokens` tables of our
-own to maintain — Neon owns those.
+JobOS uses **Neon** for both the database and authentication, and that is one
+decision rather than two.
+
+Neon Auth is **Better Auth, hosted by Neon**, and it writes its tables into a
+`neon_auth` schema *inside your own database*. Users, sessions and accounts are
+ordinary rows you can join against — not records behind someone else's API.
+So `owner_id` on every domain table is a real foreign key with a real
+`ON DELETE CASCADE`, enforced by Postgres.
+
+> Neon Auth used to be built on Stack Auth, which mirrored users into a
+> `neon_auth.users_sync` table. It is Better Auth now, and the shape is
+> different: `neon_auth.user`, `.session`, `.account`, plus the organization
+> plugin. If you find guidance referring to `users_sync`, it is out of date.
 
 ## Who owns which schema
 
-| Schema | Owned by | Migrated by |
-| --- | --- | --- |
-| `neon_auth` | Neon Auth | Neon. Never us. |
-| `public` | JobOS | `drizzle/*.sql` |
+| Schema | Tables | Owned by | Migrated by |
+| --- | --- | --- | --- |
+| `neon_auth` | `user`, `session`, `account`, `verification`, `jwks`, `organization`, `member`, `invitation` | Neon Auth | Neon. Never us. |
+| `public` | the 8 domain tables | JobOS | `drizzle/*.sql` |
 
-`src/lib/db/neon-auth.ts` declares `users_sync` so joins are typed. It is
-deliberately **not** re-exported from `schema.ts`: drizzle-kit generates DDL
-for every table reachable from the configured entrypoint, and a migration
-containing `CREATE SCHEMA "neon_auth"` would collide with Neon's own
-provisioning the first time it ran. Keeping the table unreachable makes that
-impossible rather than merely discouraged.
+`src/lib/db/neon-auth.ts` declares the two tables we read (`user`, `session`) so
+joins are typed. It is deliberately **not** re-exported from `schema.ts`:
+drizzle-kit generates DDL for every table reachable from the configured
+entrypoint, and a migration containing `CREATE SCHEMA "neon_auth"` collides with
+Neon's own provisioning the first time it runs. Keeping the module unreachable
+makes that impossible rather than merely discouraged.
 
-(`schemaFilter` in `drizzle.config.ts` does not prevent this — it filters
-introspection and `push`, not `generate`. It is set anyway, as a second line
-of defence for `push` and `studio`.)
+(`schemaFilter` in `drizzle.config.ts` does not prevent it — it filters
+introspection and `push`, not `generate`. It is set anyway as a second line of
+defence.)
 
-## Phase 0 state
+## Setting it up from scratch
 
-Nothing is connected. The schema is defined and the migration is generated, but
-no database exists and no screen queries one.
+Everything below is CLI-only; nothing needs the Neon console.
 
-## Turning it on (Phase 1)
-
-**1 · Create the Neon project** and copy the *pooled* connection string
-(the host containing `-pooler`) into `.env.local` as `DATABASE_URL`.
-
-**2 · Apply the migration.**
+**1 · Create a project** (or use an existing one) and note its id:
 
 ```bash
-pnpm db:migrate        # applies drizzle/*.sql
+npx neonctl projects list --org-id <your-org>
 ```
 
-**3 · Enable Auth** in the Neon console. It provisions `neon_auth.users_sync`
-and hands you the three Stack keys for `.env.local`.
+**2 · Enable Auth on the branch.** This provisions the `neon_auth` schema and
+prints the `base_url` you need:
 
-**4 · Add the ownership foreign keys.** These could not be part of the initial
-migration, because their target table did not exist yet. Run once, after Auth
-is enabled:
-
-```sql
-ALTER TABLE "company"        ADD CONSTRAINT "company_owner_fk"        FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "project"        ADD CONSTRAINT "project_owner_fk"        FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "work_log"       ADD CONSTRAINT "work_log_owner_fk"       FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "resume_master"  ADD CONSTRAINT "resume_master_owner_fk"  FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "resume_version" ADD CONSTRAINT "resume_version_owner_fk" FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "job_criteria"   ADD CONSTRAINT "job_criteria_owner_fk"   FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "job"            ADD CONSTRAINT "job_owner_fk"            FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
-ALTER TABLE "application"    ADD CONSTRAINT "application_owner_fk"    FOREIGN KEY ("owner_id") REFERENCES "neon_auth"."users_sync"("id") ON DELETE CASCADE;
+```bash
+npx neonctl neon-auth enable --project-id <id> --branch <branch>
 ```
 
-Save it as `drizzle/0001_owner_foreign_keys.sql` so it runs with everything
-else.
+Email + password is enabled by default, with email verification **not**
+required — which is what lets a seeded demo account sign in immediately.
 
-**5 · Replace the placeholder** in `src/lib/auth/index.ts` with the real Stack
-session read, and make `requireUser()` redirect.
+**3 · Collect the connection strings.** Two of them, for two different jobs:
+
+```bash
+npx neonctl connection-string production --project-id <id> --pooled   # DATABASE_URL
+npx neonctl connection-string production --project-id <id>            # DATABASE_URL_UNPOOLED
+```
+
+The positional branch name must come *before* the flags, or the CLI reports
+`Unknown command`.
+
+**4 · Fill `.env.local`** from `.env.example`, including a cookie secret:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+**5 · Apply the migrations.**
+
+```bash
+pnpm db:migrate                                        # drizzle/0000_initial.sql
+node scripts/apply-sql.mjs drizzle/0001_owner_foreign_keys.sql
+```
+
+The second file is hand-written and applied separately on purpose — see below.
+
+**6 · Seed the demo account** (optional but recommended):
+
+```bash
+pnpm db:seed
+```
+
+## Why the foreign keys are a separate migration
+
+`drizzle/0001_owner_foreign_keys.sql` adds the `owner_id → neon_auth.user.id`
+constraints. They cannot be part of `0000` because their target does not exist
+until Auth is enabled, and `0000` has to stay generatable offline from the
+schema file alone.
+
+`scripts/apply-sql.mjs` applies it and is idempotent — re-running skips
+constraints that already exist.
+
+## Trusted origins
+
+Neon Auth rejects sign-in requests from an origin it does not trust.
+`allow_localhost` is on, so development works out of the box. Every deployed
+origin has to be registered:
+
+```bash
+npx neonctl neon-auth domain add https://job.imswarnil.com \
+  --project-id <id> --branch <branch>
+npx neonctl neon-auth domain list --project-id <id> --branch <branch>
+```
+
+This is the first thing to check if sign-in works locally and fails in
+production.
 
 ## The scoping rule
 
@@ -79,8 +122,12 @@ await db.select().from(workLog).where(eq(workLog.ownerId, ownerId));
 ```
 
 `scope()` lives in `src/lib/auth/scope.ts` and is the only sanctioned source of
-that id. When organizations arrive in Phase 6 it starts returning
-`{ ownerId, organizationId }` and callers that destructure it keep working.
+that id. Postgres backs it up: `owner_id` is a real FK, so a row cannot point
+at a user who does not exist.
+
+Admin queries (`src/lib/admin/queries.ts`) are the one deliberate exception —
+they are instance-wide, which is why the *route* is the security boundary
+there.
 
 ## The tables
 
@@ -88,12 +135,25 @@ that id. When organizations arrive in Phase 6 it starts returning
 | --- | --- | --- |
 | `company` | 1 | Unique on `(owner_id, name)` |
 | `project` | 1 | `end_date` null means ongoing |
-| `work_log` | 1 | The source of truth. Indexed on `(owner_id, date)` |
+| `work_log` | 1 | The source of truth. Indexed on `(owner_id, occurred_on)` and `(owner_id, type)` |
 | `resume_master` | 2 | One per owner. `data` is jsonb |
 | `resume_version` | 2/3 | `job_id` set when tailored for a role |
 | `job_criteria` | 4 | Saved searches the Phase 5 agent runs |
 | `job` | 4 | Unique on `(owner_id, source, external_id)` |
 | `application` | 4 | Records *which resume version* actually went out |
 
-`application_status` enum: `found · tailored · applied · interview · offer ·
-rejected · skipped`.
+**`log_type` enum** — `work · learning · challenge · trick · setback · win`.
+`company_id` is nullable on `work_log` precisely so a personal entry does not
+have to be filed under an employer.
+
+**`application_status` enum** — `found · tailored · applied · interview ·
+offer · rejected · skipped`.
+
+## Teams, later
+
+Neon Auth already ships the Better Auth **organization plugin**, enabled:
+`neon_auth.organization`, `member` and `invitation` exist and
+`session.activeOrganizationId` is populated. Phase 6 does not have to build a
+tenancy layer — it has to start reading the one that is already there. The
+change lands in `scope()`, which starts returning
+`{ ownerId, organizationId }`.

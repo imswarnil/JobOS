@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { NAV } from "@/lib/nav";
+import { PHASES } from "@/lib/phases";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/lib/auth";
 import { Brand } from "@/components/shell/brand";
@@ -32,6 +33,9 @@ export function Sidebar({
   className?: string;
 }) {
   const pathname = usePathname();
+  // The chip tracks whichever phase is actually in progress, so it stops
+  // being a lie the moment lib/phases.ts is updated.
+  const currentPhase = PHASES.find((p) => p.status === "building");
 
   return (
     <div
@@ -42,9 +46,11 @@ export function Sidebar({
     >
       <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
         <Brand />
-        <Badge tone="accent" title="Foundation & skeleton">
-          Phase 0
-        </Badge>
+        {currentPhase ? (
+          <Badge tone="accent" title={currentPhase.title}>
+            Phase {currentPhase.id.slice(1)}
+          </Badge>
+        ) : null}
       </div>
 
       <div className="px-3 pb-4">

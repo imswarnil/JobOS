@@ -53,8 +53,8 @@ export const NAV: NavGroup[] = [
         label: "Journal",
         href: "/journal",
         icon: NotebookPen,
-        description: "Log what you did today, while you still remember it.",
-        phase: "P1",
+        description:
+          "Work, lessons, walls, tricks — everything that made you better.",
       },
     ],
   },

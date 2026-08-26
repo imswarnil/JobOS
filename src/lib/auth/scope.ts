@@ -1,21 +1,25 @@
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 
 /**
  * OWNERSHIP SCOPING
  * =================
  *
- * SaaS-readiness rule #2: no domain query may run without a user id attached.
- * JobOS has exactly one user today, which is precisely why this helper exists
- * now — a single-user app that queries unscoped grows a hundred unscoped
- * queries, and every one of them is a data leak on the day a second user
- * signs up.
+ * No domain query may run without a user id attached. `scope()` is the only
+ * sanctioned source of that id, so there is one line to audit rather than a
+ * hundred call sites to trust.
  *
- * The rule: never write `db.select().from(workLog)` in a feature. Write
+ * The rule: never write `db.select().from(workLog)`. Write
  * `db.select().from(workLog).where(eq(workLog.ownerId, await ownerId()))`.
  *
- * TODO(Phase 6): when organizations arrive, this is the one place that learns
- * about them — `scope()` starts returning `{ ownerId, organizationId }` and
- * the feature code that destructures it keeps working unchanged.
+ * Postgres backs this up — `owner_id` is a real foreign key to
+ * `neon_auth.user.id` (drizzle/0001), so a row cannot be orphaned or forged
+ * to point at a user who does not exist.
+ *
+ * TODO(Phase 6): Neon Auth already ships the Better Auth organization plugin
+ * (`neon_auth.organization` / `member` exist and are enabled). When teams
+ * arrive, this returns `{ ownerId, organizationId }` from
+ * `session.activeOrganizationId`, and callers that destructure it keep
+ * working unchanged.
  */
 
 export interface Scope {
@@ -23,9 +27,9 @@ export interface Scope {
   // TODO(Phase 6): organizationId?: string;
 }
 
-/** The scope every domain read and write must be filtered by. */
+/** Throws (via redirect) if nobody is signed in — callers get a real id. */
 export async function scope(): Promise<Scope> {
-  const user = await getCurrentUser();
+  const user = await requireUser();
   return { ownerId: user.id };
 }
 

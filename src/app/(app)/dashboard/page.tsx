@@ -10,26 +10,39 @@ import {
   Send,
 } from "lucide-react";
 
-import { getCurrentUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { PHASES } from "@/lib/phases";
+import { dashboardStats, listEntries } from "@/lib/journal/queries";
 import { formatDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatTile } from "@/components/stat-tile";
+import { EntryCard } from "@/components/journal/entry-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Dashboard" };
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
+  const user = await requireUser();
+  const [stats, recent] = await Promise.all([
+    dashboardStats(),
+    listEntries({ limit: 3 }),
+  ]);
+
   const firstName = user.name.split(" ")[0];
+  const empty = stats.totalEntries === 0;
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
       <PageHeader
         eyebrow={<span className="t-slate">{formatDate(new Date())}</span>}
         title={`Good to see you, ${firstName}.`}
-        description="Nothing is logged yet — which is exactly what an empty career record looks like on day one. The fastest way to make this screen useful is to write down what you did today."
+        description={
+          empty
+            ? "Nothing is logged yet — which is exactly what an empty career record looks like on day one. The fastest way to make this screen useful is to write down what you did today."
+            : `${stats.totalEntries} ${stats.totalEntries === 1 ? "entry" : "entries"} on the record. Keep it going — the value compounds the moment you need a resume.`
+        }
         actions={
           <Link
             href="/journal"
@@ -41,26 +54,29 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* TODO(Phase 1/4): these read from work_log and application, scoped by
-          owner. Hardcoded zeros until then. */}
       <section
         className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         aria-label="At a glance"
       >
         <StatTile
           label="Logs this week"
-          value={0}
+          value={stats.entriesThisWeek}
           hint="Entries written in the last 7 days."
           icon={NotebookPen}
           tone="accent"
         />
         <StatTile
           label="Current streak"
-          value={0}
-          hint="Consecutive days with an entry."
+          value={stats.streak}
+          hint={
+            stats.streak > 0
+              ? `${stats.streak} consecutive ${stats.streak === 1 ? "day" : "days"}.`
+              : "Consecutive days with an entry."
+          }
           icon={Flame}
           tone="craft"
         />
+        {/* TODO(Phase 4): real counts from `job` and `application`. */}
         <StatTile
           label="Jobs matched"
           value={0}
@@ -74,6 +90,24 @@ export default async function DashboardPage() {
           icon={Send}
         />
       </section>
+
+      {recent.length ? (
+        <section className="space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-base font-semibold text-fg">Latest entries</h2>
+            <Link
+              href="/journal"
+              className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-fg-accent hover:gap-2.5"
+            >
+              Open the journal
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </Link>
+          </div>
+          {recent.map((entry) => (
+            <EntryCard key={entry.id} entry={entry} />
+          ))}
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
         <Card>
@@ -111,12 +145,15 @@ export default async function DashboardPage() {
                         className={
                           active
                             ? "text-sm font-semibold text-fg"
-                            : "text-sm font-medium text-fg-muted"
+                            : done
+                              ? "text-sm font-medium text-fg-muted"
+                              : "text-sm font-medium text-fg-muted"
                         }
                       >
                         Phase {phase.id.slice(1)} · {phase.title}
                       </p>
                       {active ? <Badge tone="accent">In progress</Badge> : null}
+                      {done ? <Badge tone="success">Shipped</Badge> : null}
                     </div>
                     <p className="mt-0.5 max-w-[62ch] text-xs leading-relaxed text-fg-subtle">
                       {phase.summary}
@@ -139,30 +176,16 @@ export default async function DashboardPage() {
           <CardContent className="relative">
             <ol className="space-y-4 border-l border-line pl-5">
               {[
-                {
-                  n: "Journal",
-                  t: "You log the work as it happens, in your own words.",
-                },
-                {
-                  n: "Resume",
-                  t: "That record becomes a structured master resume.",
-                },
-                {
-                  n: "Tailoring",
-                  t: "Each job description reshapes it — using only real facts.",
-                },
-                {
-                  n: "Agent",
-                  t: "Matching roles arrive, tailored and ready to send.",
-                },
+                { n: "Journal", t: "You log the work as it happens, in your own words." },
+                { n: "Resume", t: "That record becomes a structured master resume." },
+                { n: "Tailoring", t: "Each job description reshapes it — using only real facts." },
+                { n: "Agent", t: "Matching roles arrive, tailored and ready to send." },
               ].map((step, i) => (
                 <li key={step.n} className="relative">
                   <span className="t-num absolute top-0 -left-[1.6875rem] grid h-5 w-5 place-items-center rounded-pill border border-line bg-surface text-[0.625rem] font-bold text-fg-subtle">
                     {i + 1}
                   </span>
-                  <p className="text-[0.8125rem] font-semibold text-fg">
-                    {step.n}
-                  </p>
+                  <p className="text-[0.8125rem] font-semibold text-fg">{step.n}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-fg-subtle">
                     {step.t}
                   </p>
@@ -174,7 +197,7 @@ export default async function DashboardPage() {
               href="/journal"
               className="mt-6 inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-fg-accent hover:gap-2.5"
             >
-              Start with a log entry
+              {empty ? "Start with a log entry" : "Add today's entry"}
               <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
             </Link>
           </CardContent>

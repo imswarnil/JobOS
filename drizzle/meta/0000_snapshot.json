@@ -1,5 +1,5 @@
 {
-  "id": "853d13a7-4f63-4049-9da7-c70eaf9069f5",
+  "id": "590a1312-48c5-4bf2-ba74-e051f3620ad5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -17,7 +17,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -153,7 +153,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -242,7 +242,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -387,7 +387,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -481,7 +481,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -596,7 +596,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -659,7 +659,7 @@
         },
         "owner_id": {
           "name": "owner_id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -763,13 +763,33 @@
         },
         "owner_id": {
           "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "log_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'work'"
+        },
+        "occurred_on": {
+          "name": "occurred_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "date": {
-          "name": "date",
-          "type": "date",
+        "body": {
+          "name": "body",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -784,12 +804,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
-        },
-        "tasks": {
-          "name": "tasks",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "challenges": {
           "name": "challenges",
@@ -849,7 +863,28 @@
               "nulls": "last"
             },
             {
-              "expression": "date",
+              "expression": "occurred_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "work_log_owner_type_idx": {
+          "name": "work_log_owner_type_idx",
+          "columns": [
+            {
+              "expression": "owner_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -923,6 +958,18 @@
         "offer",
         "rejected",
         "skipped"
+      ]
+    },
+    "public.log_type": {
+      "name": "log_type",
+      "schema": "public",
+      "values": [
+        "work",
+        "learning",
+        "challenge",
+        "trick",
+        "setback",
+        "win"
       ]
     }
   },
