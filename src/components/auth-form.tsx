@@ -21,7 +21,14 @@ import { cn } from "@/lib/utils";
  * never reaches the bundle. On success the action redirects, which is why
  * there is no success branch to render here.
  */
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+export function AuthForm({
+  mode,
+  demoEmail,
+}: {
+  mode: "login" | "signup";
+  /** Present only when a demo account is configured on this deployment. */
+  demoEmail?: string;
+}) {
   const isSignup = mode === "signup";
   const action = isSignup ? signUpAction : signInAction;
 
@@ -32,7 +39,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <div className="space-y-6">
-      <DemoButton />
+      <DemoButton email={demoEmail} />
 
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-line" />
@@ -119,11 +126,13 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
  * journal shows nothing, so the demo user ships with fifteen real-looking
  * entries across all six log types.
  */
-function DemoButton() {
+function DemoButton({ email }: { email?: string }) {
   const [state, formAction, pending] = React.useActionState<
     AuthActionState,
     FormData
   >(async () => signInAsDemoAction(), {});
+
+  if (!email) return null;
 
   return (
     <form action={formAction} className="space-y-2">
@@ -145,7 +154,8 @@ function DemoButton() {
         Explore the demo account
       </button>
       <p className="text-center text-xs text-fg-subtle">
-        No sign-up. A real account with a journal already in it.
+        No sign-up. A real account with a journal already in it —{" "}
+        <span className="font-medium text-fg-muted">{email}</span>.
       </p>
       {state.error ? (
         <p role="alert" className="text-center text-xs text-danger-fg">

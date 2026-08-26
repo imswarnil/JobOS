@@ -32,9 +32,11 @@ export default async function JournalPage({
       ? (params.type as LogType)
       : undefined;
 
+  const filter = { type, q: params.q };
   const [entries, counts, companies, projects] = await Promise.all([
-    listEntries({ type, q: params.q }),
-    countsByType(),
+    listEntries(filter),
+    // Same filter, minus the type — so each chip counts its own matches.
+    countsByType(filter),
     listCompanies(),
     listProjects(),
   ]);

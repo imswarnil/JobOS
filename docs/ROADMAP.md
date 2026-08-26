@@ -38,11 +38,12 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Streaks and weekly counts on the dashboard (streak computed in SQL)
 - [x] Seeded demo account with 15 entries across all six types
 - [x] Public homepage
+- [x] Edit your profile name from Settings
 - [ ] Edit an existing entry
-- [ ] Full-text search across the journal
+- [x] Search across title, body and impact, held in the URL
 - [ ] Manage companies and projects from the UI
 - [ ] Weekly summary digest
-- [ ] Export everything as JSON from Settings
+- [x] Export everything as JSON from Settings
 
 ## Phase 2 — Resume Builder
 

@@ -5,6 +5,9 @@ import { AuthForm } from "@/components/auth-form";
 
 export const metadata: Metadata = { title: "Create account" };
 
+// Reads DEMO_EMAIL at request time so the hint reflects the deployment.
+export const dynamic = "force-dynamic";
+
 export default function SignupPage() {
   return (
     <div className="space-y-8">
@@ -17,7 +20,7 @@ export default function SignupPage() {
         </p>
       </div>
 
-      <AuthForm mode="signup" />
+      <AuthForm mode="signup" demoEmail={process.env.DEMO_EMAIL} />
 
       <p className="text-center text-sm text-fg-muted">
         Already have an account?{" "}

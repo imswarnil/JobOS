@@ -21,12 +21,20 @@ export interface JournalFilter {
 
 export type JournalEntry = Awaited<ReturnType<typeof listEntries>>[number];
 
-export async function listEntries(filter: JournalFilter = {}) {
-  const db = getDb();
-  const owner = await ownerId();
-
+/**
+ * The shared WHERE clause. Both the list and the per-type counts build on it,
+ * so a chip can never claim a number the list will not produce.
+ *
+ * `includeType` is what lets the counts reuse it: the counts group *by* type,
+ * so they must apply every filter except the type itself.
+ */
+function conditions(
+  owner: string,
+  filter: JournalFilter,
+  { includeType = true }: { includeType?: boolean } = {},
+) {
   const where = [eq(workLog.ownerId, owner)];
-  if (filter.type) where.push(eq(workLog.type, filter.type));
+  if (includeType && filter.type) where.push(eq(workLog.type, filter.type));
   if (filter.companyId) where.push(eq(workLog.companyId, filter.companyId));
   if (filter.q?.trim()) {
     const needle = `%${filter.q.trim()}%`;
@@ -38,6 +46,13 @@ export async function listEntries(filter: JournalFilter = {}) {
     // `or()` is only undefined when given no arguments; it never is here.
     if (match) where.push(match);
   }
+  return where;
+}
+
+export async function listEntries(filter: JournalFilter = {}) {
+  const db = getDb();
+  const owner = await ownerId();
+  const where = conditions(owner, filter);
 
   return db
     .select({
@@ -65,15 +80,24 @@ export async function listEntries(filter: JournalFilter = {}) {
     .limit(filter.limit ?? 100);
 }
 
-/** Entry counts per type, for the filter chips. Zero-filled by the caller. */
-export async function countsByType(): Promise<Record<string, number>> {
+/**
+ * Entry counts per type, for the filter chips.
+ *
+ * Honours everything in the filter *except* the type — so while a search is
+ * active every chip shows how many matches that kind would give you, which is
+ * the number you are actually deciding on. Ignoring the search here would
+ * make the chips quietly lie.
+ */
+export async function countsByType(
+  filter: JournalFilter = {},
+): Promise<Record<string, number>> {
   const db = getDb();
   const owner = await ownerId();
 
   const rows = await db
     .select({ type: workLog.type, n: count() })
     .from(workLog)
-    .where(eq(workLog.ownerId, owner))
+    .where(and(...conditions(owner, filter, { includeType: false })))
     .groupBy(workLog.type);
 
   return Object.fromEntries(rows.map((r) => [r.type, Number(r.n)]));

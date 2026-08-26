@@ -4,9 +4,24 @@ A career operating system. Log the work, build the resume, tailor it to the
 role, track every application — one system instead of four half-remembered
 ones.
 
-**Live:** [job.imswarnil.com](https://job.imswarnil.com) ·
-**Demo:** click *Explore the demo account* — no sign-up, a real account with a
-journal already in it.
+**Live:** [job.imswarnil.com](https://job.imswarnil.com)
+
+## Try it
+
+Click **Explore the demo account** on the sign-in page — one click, no sign-up.
+Or sign in with the credentials directly:
+
+| | |
+| --- | --- |
+| **Email** | `demo@jobos.app` |
+| **Password** | `jobos-demo-60645d8d` |
+
+It is a real account, not a mock: 15 journal entries across all six log types,
+two companies and three projects. Write in it, delete things, break it — run
+`pnpm db:seed` to reset it to a known state.
+
+These credentials are public on purpose. The account holds nothing but seed
+data, and it is the only one that does — treat it as a fixture, not a login.
 
 Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 [`docs/ROADMAP.md`](docs/ROADMAP.md) for what lands when.
