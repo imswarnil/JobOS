@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "@/lib/db";
-import { resumeMaster } from "@/lib/db/schema";
+import { resumeMaster, resumeVersion } from "@/lib/db/schema";
 import { ownerId } from "@/lib/auth/scope";
 import { readResume } from "@/lib/resume/queries";
 import {
+  HEADER_FIELDS,
   KIND_META,
   SECTION_KINDS,
   basicsSchema,
@@ -16,6 +17,8 @@ import {
   newId,
   resumeSchema,
   type ResumeData,
+  layoutSchema,
+  type HeaderField,
   type ResumeItem,
   type SectionKind,
 } from "@/lib/resume/schema";
@@ -234,4 +237,120 @@ export async function moveItemAction(formData: FormData): Promise<void> {
     [section.items[i], section.items[j]] = [section.items[j], section.items[i]];
     return draft;
   });
+}
+
+/* ── Versions ────────────────────────────────────────────────────────────── */
+
+/**
+ * Snapshot the master resume under a name.
+ *
+ * A copy, not a reference: the point of a version is that editing the master
+ * afterwards does not silently rewrite the thing you sent to a company three
+ * weeks ago. "Which resume did they actually get" is the question this exists
+ * to answer.
+ */
+export async function saveVersionAction(
+  _prev: ResumeFormState,
+  formData: FormData,
+): Promise<ResumeFormState> {
+  const label = str(formData, "label");
+  if (!label) return { error: "Give this version a name." };
+  if (label.length > 120) return { error: "That name is too long." };
+
+  const current = await readResume();
+  if (!current) return { error: "No resume to save yet." };
+
+  const owner = await ownerId();
+  const db = getDb();
+
+  await db.insert(resumeVersion).values({
+    ownerId: owner,
+    label,
+    data: current,
+  });
+
+  revalidatePath("/resume");
+  return OK;
+}
+
+export async function deleteVersionAction(formData: FormData): Promise<void> {
+  const id = String(formData.get("id") ?? "");
+  const owner = await ownerId();
+  const db = getDb();
+
+  await db
+    .delete(resumeVersion)
+    .where(and(eq(resumeVersion.id, id), eq(resumeVersion.ownerId, owner)));
+
+  revalidatePath("/resume");
+}
+
+/**
+ * Copy a version back over the master.
+ *
+ * Snapshots the master first, under an automatic name, so restoring is never
+ * the move that loses work — you can always get back to what you had.
+ */
+export async function restoreVersionAction(
+  _prev: ResumeFormState,
+  formData: FormData,
+): Promise<ResumeFormState> {
+  const id = str(formData, "id");
+  const owner = await ownerId();
+  const db = getDb();
+
+  const [version] = await db
+    .select({ data: resumeVersion.data, label: resumeVersion.label })
+    .from(resumeVersion)
+    .where(and(eq(resumeVersion.id, id), eq(resumeVersion.ownerId, owner)))
+    .limit(1);
+
+  if (!version) return { error: "That version no longer exists." };
+
+  const parsed = resumeSchema.safeParse(version.data);
+  if (!parsed.success) return { error: "That version could not be read." };
+
+  const current = await readResume();
+  if (current) {
+    const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+    await db.insert(resumeVersion).values({
+      ownerId: owner,
+      label: `Before restoring “${version.label}” · ${stamp}`,
+      data: current,
+    });
+  }
+
+  await db
+    .update(resumeMaster)
+    .set({ data: parsed.data })
+    .where(eq(resumeMaster.ownerId, owner));
+
+  revalidatePath("/resume");
+  return OK;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+export async function saveLayoutAction(
+  _prev: ResumeFormState,
+  formData: FormData,
+): Promise<ResumeFormState> {
+  // Checkbox order in the DOM is the order the fields render in, and
+  // getAll preserves it — so reordering the boxes reorders the header.
+  const header = formData
+    .getAll("header")
+    .map(String)
+    .filter((f): f is HeaderField =>
+      (HEADER_FIELDS as readonly string[]).includes(f),
+    );
+
+  const parsed = layoutSchema.safeParse({
+    style: str(formData, "style") || "classic",
+    header,
+    showSummary: formData.get("showSummary") === "on",
+  });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  return mutate((draft) => ({ ...draft, layout: parsed.data }));
 }

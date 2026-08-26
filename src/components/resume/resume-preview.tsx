@@ -1,65 +1,129 @@
 import {
   formatRange,
   type ResumeData,
+  type ResumeLayoutConfig,
   type ResumeSection,
 } from "@/lib/resume/schema";
+import { cn } from "@/lib/utils";
 
 /**
  * The document itself.
  *
- * Built for an ATS parser first and a human second, which is the same set of
- * constraints either way:
+ * Built for an ATS parser first and a human second, which turns out to be the
+ * same set of constraints either way:
  *
  *   - One column. Real text. No tables, no text boxes, no icons carrying
  *     meaning — parsers read multi-column layouts in the wrong order or not
- *     at all.
+ *     at all. **This is why none of the three layouts is two-column**: the
+ *     choice is density and emphasis, never structure.
  *   - Standard headings, rendered as headings.
  *   - Contact details as plain text in the body, never in a header element.
- *   - Serif face and generous leading, because this is a document, not a UI.
+ *   - Deliberately monochrome: the accent that carries meaning everywhere
+ *     else in JobOS would just be noise printed on A4.
  *
- * Deliberately monochrome: the accent that carries meaning everywhere else in
- * JobOS would just be noise printed on A4.
- *
- * TODO(Phase 2): render the same tree through React-PDF so the export and
- * this preview cannot drift apart.
+ * TODO(Phase 2): render this same tree through React-PDF so the export and
+ * the preview cannot drift apart.
  */
+
+const SERIF = "Georgia, 'Times New Roman', serif";
+const SANS = "'Figtree', ui-sans-serif, system-ui, sans-serif";
+
+interface Skin {
+  font: string;
+  headerAlign: string;
+  nameSize: string;
+  sectionGap: string;
+  itemGap: string;
+  leading: string;
+  body: string;
+}
+
+const SKINS: Record<ResumeLayoutConfig["style"], Skin> = {
+  classic: {
+    font: SERIF,
+    headerAlign: "text-left",
+    nameSize: "text-[1.75rem]",
+    sectionGap: "mt-7",
+    itemGap: "space-y-5",
+    leading: "leading-relaxed",
+    body: "text-[0.9375rem]",
+  },
+  modern: {
+    font: SANS,
+    headerAlign: "text-left",
+    nameSize: "text-[1.625rem]",
+    sectionGap: "mt-6",
+    itemGap: "space-y-4",
+    leading: "leading-relaxed",
+    body: "text-[0.875rem]",
+  },
+  compact: {
+    font: SANS,
+    headerAlign: "text-left",
+    nameSize: "text-[1.375rem]",
+    sectionGap: "mt-4",
+    itemGap: "space-y-3",
+    leading: "leading-snug",
+    body: "text-[0.8125rem]",
+  },
+};
+
 export function ResumePreview({ data }: { data: ResumeData }) {
-  const { basics, sections } = data;
-  const contact = [basics.email, basics.phone, basics.location].filter(Boolean);
+  const { basics, sections, layout } = data;
+  const skin = SKINS[layout.style] ?? SKINS.classic;
   const nonEmpty = sections.filter((s) => s.items.length > 0);
+
+  // Only the details the author chose, in the order they chose them.
+  const contact = layout.header
+    .filter((f) => f !== "links")
+    .map((f) => basics[f])
+    .filter(Boolean);
+  const showLinks = layout.header.includes("links") && basics.links.length > 0;
 
   return (
     <article
-      className="mx-auto w-full max-w-[52rem] bg-white px-10 py-12 font-serif text-[#111] shadow-e2 sm:px-14 sm:py-14"
-      style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+      className={cn(
+        "mx-auto w-full max-w-[52rem] bg-white text-[#111] shadow-e2",
+        layout.style === "compact"
+          ? "px-9 py-9 sm:px-12 sm:py-10"
+          : "px-10 py-12 sm:px-14 sm:py-14",
+      )}
+      style={{ fontFamily: skin.font }}
       aria-label="Resume preview"
     >
-      <header className="border-b border-[#ccc] pb-4">
-        <h1 className="text-[1.75rem] leading-tight font-bold tracking-[-0.01em]">
+      <header className={cn("border-b border-[#ccc] pb-4", skin.headerAlign)}>
+        <h1
+          className={cn(
+            skin.nameSize,
+            "leading-tight font-bold tracking-[-0.01em]",
+          )}
+        >
           {basics.name || "Your name"}
         </h1>
         {basics.headline ? (
           <p className="mt-1 text-[1.0625rem] text-[#333]">{basics.headline}</p>
         ) : null}
 
-        {contact.length || basics.links.length ? (
+        {contact.length || showLinks ? (
           <p className="mt-2.5 text-[0.8125rem] leading-relaxed text-[#444]">
             {contact.join("  ·  ")}
-            {contact.length && basics.links.length ? "  ·  " : ""}
-            {basics.links.map((link, i) => (
-              <span key={link.id}>
-                {i > 0 ? "  ·  " : ""}
-                <a href={link.url} className="underline">
-                  {link.label}
-                </a>
-              </span>
-            ))}
+            {contact.length && showLinks ? "  ·  " : ""}
+            {showLinks
+              ? basics.links.map((link, i) => (
+                  <span key={link.id}>
+                    {i > 0 ? "  ·  " : ""}
+                    <a href={link.url} className="underline">
+                      {link.label}
+                    </a>
+                  </span>
+                ))
+              : null}
           </p>
         ) : null}
       </header>
 
-      {basics.summary ? (
-        <p className="mt-5 text-[0.9375rem] leading-relaxed text-[#222]">
+      {layout.showSummary && basics.summary ? (
+        <p className={cn("mt-5 text-[#222]", skin.body, skin.leading)}>
           {basics.summary}
         </p>
       ) : null}
@@ -71,15 +135,15 @@ export function ResumePreview({ data }: { data: ResumeData }) {
       ) : null}
 
       {nonEmpty.map((section) => (
-        <Section key={section.id} section={section} />
+        <Section key={section.id} section={section} skin={skin} />
       ))}
     </article>
   );
 }
 
-function Section({ section }: { section: ResumeSection }) {
+function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
   return (
-    <section className="mt-7">
+    <section className={skin.sectionGap}>
       <h2 className="border-b border-[#ccc] pb-1 text-[0.8125rem] font-bold tracking-[0.12em] text-[#000] uppercase">
         {section.title}
       </h2>
@@ -87,7 +151,7 @@ function Section({ section }: { section: ResumeSection }) {
       {section.kind === "skills" ? (
         <dl className="mt-3 space-y-1.5">
           {section.items.map((item) => (
-            <div key={item.id} className="flex flex-wrap gap-x-2 text-[0.9375rem]">
+            <div key={item.id} className={cn("flex flex-wrap gap-x-2", skin.body)}>
               <dt className="font-bold">{item.title}:</dt>
               <dd className="text-[#222]">
                 {item.tags.length ? item.tags.join(", ") : item.subtitle}
@@ -96,7 +160,7 @@ function Section({ section }: { section: ResumeSection }) {
           ))}
         </dl>
       ) : (
-        <div className="mt-3 space-y-5">
+        <div className={cn("mt-3", skin.itemGap)}>
           {section.items.map((item) => {
             const range = formatRange(item);
             return (
@@ -131,7 +195,13 @@ function Section({ section }: { section: ResumeSection }) {
                 ) : null}
 
                 {item.bullets.length ? (
-                  <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[0.9375rem] leading-relaxed text-[#222]">
+                  <ul
+                    className={cn(
+                      "mt-1.5 list-disc space-y-1 pl-5 text-[#222]",
+                      skin.body,
+                      skin.leading,
+                    )}
+                  >
                     {item.bullets.map((b, i) => (
                       <li key={i}>{b}</li>
                     ))}

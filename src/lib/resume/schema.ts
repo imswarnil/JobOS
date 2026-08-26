@@ -38,6 +38,64 @@ export const linkSchema = z.object({
   url: z.string().trim().min(1).max(300),
 });
 
+/**
+ * How the document is laid out.
+ *
+ * All three are single-column and ATS-safe — the choice is about density and
+ * emphasis, not about structure. A two-column layout is the one thing a
+ * resume builder must not offer, because parsers read the columns
+ * interleaved and the resume arrives as nonsense.
+ *
+ *   classic   serif, centred header, generous — the default
+ *   modern    sans, left-aligned header, tighter rules
+ *   compact   same as modern with the leading pulled in, for long careers
+ */
+export const LAYOUTS = ["classic", "modern", "compact"] as const;
+export type ResumeLayout = (typeof LAYOUTS)[number];
+
+/** The header fields, in the order the author wants them. */
+export const HEADER_FIELDS = ["email", "phone", "location", "links"] as const;
+export type HeaderField = (typeof HEADER_FIELDS)[number];
+
+export const layoutSchema = z.object({
+  style: z.enum(LAYOUTS).default("classic"),
+  /**
+   * Which details appear under the name, and in what order. Anything omitted
+   * is simply left out — some people do not want a phone number on a document
+   * they hand to strangers.
+   */
+  header: z.array(z.enum(HEADER_FIELDS)).max(4).default([...HEADER_FIELDS]),
+  /** Show the summary paragraph at all. */
+  showSummary: z.boolean().default(true),
+});
+
+export type ResumeLayoutConfig = z.infer<typeof layoutSchema>;
+
+export const LAYOUT_META: Record<
+  ResumeLayout,
+  { label: string; hint: string }
+> = {
+  classic: {
+    label: "Classic",
+    hint: "Serif, centred name, generous spacing. Reads like a document.",
+  },
+  modern: {
+    label: "Modern",
+    hint: "Sans-serif, left-aligned, tighter rules.",
+  },
+  compact: {
+    label: "Compact",
+    hint: "Modern with the leading pulled in — for a long career on one page.",
+  },
+};
+
+export const HEADER_FIELD_META: Record<HeaderField, string> = {
+  email: "Email",
+  phone: "Phone",
+  location: "Location",
+  links: "Links",
+};
+
 export const basicsSchema = z.object({
   name: z.string().trim().max(120).default(""),
   /** The one line under the name. "Senior Backend Engineer", not an objective. */
@@ -86,6 +144,15 @@ export const sectionSchema = z.object({
 export const resumeSchema = z.object({
   basics: basicsSchema,
   sections: z.array(sectionSchema).max(20).default([]),
+  /**
+   * Optional so every document stored before layouts existed still parses —
+   * `parseResume` fills the default rather than discarding the resume.
+   */
+  layout: layoutSchema.default({
+    style: "classic",
+    header: [...HEADER_FIELDS],
+    showSummary: true,
+  }),
 });
 
 export type ResumeLink = z.infer<typeof linkSchema>;
@@ -152,6 +219,11 @@ export function emptyResume(name = "", email = ""): ResumeData {
       { id: newId(), title: "Education", kind: "education", items: [] },
       { id: newId(), title: "Skills", kind: "skills", items: [] },
     ],
+    layout: {
+      style: "classic",
+      header: [...HEADER_FIELDS],
+      showSummary: true,
+    },
   };
 }
 
