@@ -52,6 +52,8 @@ Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 | Icons | Lucide |
 | Package manager | pnpm |
 | Hosting | Vercel |
+| Models | Gemini (primary) → Groq (fallback) |
+| App | Installable PWA with offline fallback |
 
 **Database and auth are the same vendor on purpose.** Neon Auth writes its
 tables into the `neon_auth` schema of the same Postgres, so `owner_id` is an
@@ -193,6 +195,7 @@ from the session, never from the form.
 | `pnpm db:check` | verify schema, FKs, auth tables and env in one command |
 | `pnpm vercel:env` | push `.env.local` into a linked Vercel project |
 | `pnpm db:studio` | Drizzle Studio |
+| `pnpm icons` | regenerate the PWA icon set |
 
 ## Licence
 

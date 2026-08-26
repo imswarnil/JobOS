@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Figtree } from "next/font/google";
 
 import { RAIL_COOKIE, THEME_COOKIE, isTheme } from "@/lib/preferences";
+import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 
 import "./globals.css";
 
@@ -33,6 +34,9 @@ export const viewport: Viewport = {
     { media: "(prefers-color-scheme: light)", color: "#f8f8fa" },
     { media: "(prefers-color-scheme: dark)", color: "#08080c" },
   ],
+  // Standalone installs run under the notch on modern phones; without this
+  // the app renders in the safe area and looks letterboxed.
+  viewportFit: "cover",
 };
 
 /**
@@ -68,7 +72,10 @@ export default async function RootLayout({
       data-rail={rail}
       suppressHydrationWarning
     >
-      <body className={`${figtree.variable} antialiased`}>{children}</body>
+      <body className={`${figtree.variable} antialiased`}>
+        {children}
+        <RegisterServiceWorker />
+      </body>
     </html>
   );
 }

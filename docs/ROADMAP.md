@@ -41,7 +41,10 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Edit your profile name from Settings
 - [ ] Edit an existing entry
 - [x] Search across title, body and impact, held in the URL
-- [ ] Manage companies and projects from the UI
+- [x] Career setup: employers, clients, courses and projects
+- [x] Calendar and board views alongside the list
+- [x] Quick composer — a type and one line is a complete entry
+- [x] Collapsible sidebar, motion system, installable PWA
 - [ ] Weekly summary digest
 - [x] Export everything as JSON from Settings
 
@@ -56,13 +59,17 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Entries: add, edit, reorder, delete, with per-kind fields
 - [x] Live preview of the ATS-safe document beside the editor
 - [x] Demo account ships with a populated resume
+- [x] Three layouts and an arrangeable header
+- [x] Named versions — save, preview, restore
 - [ ] PDF export via React-PDF, rendering the same tree as the preview
-- [ ] Named versions and history
 - [ ] Generate bullets from journal entries
 
 ## Phase 3 — JD-tailored resume
 
-- [ ] Gemini provider (primary), Groq provider (fallback)
+- [x] Gemini provider (primary), Groq provider (fallback), with JSON
+      validation inside the fallback chain
+- [x] Per-user rate limiting (5 per rolling 24h) backed by an ledger table
+- [x] "Define my role" — names your job title from your own entries
 - [ ] Job description parsing into structured fields
 - [ ] Fact-grounded rewrite — journal entries as the only permitted source
 - [ ] Diff against the master resume

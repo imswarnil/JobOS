@@ -43,11 +43,13 @@ export const PHASES: Phase[] = [
     deliverables: [
       "Neon Auth: real accounts, sessions and sign-out",
       "Six log types: work, learning, challenge, trick, setback, win",
-      "Entry composer with per-type prompts",
+      "Quick composer — a type and one line is a complete entry",
+      "List, calendar and board views",
       "Filter by kind and search, with live counts",
-      "Companies and projects",
+      "Career setup: employers, clients, courses and projects",
       "Export everything as JSON",
       "Streaks and weekly counts on the dashboard",
+      "Installable as a PWA, with an offline fallback",
     ],
   },
   {
@@ -61,8 +63,9 @@ export const PHASES: Phase[] = [
       "Sections you can add, rename, reorder and delete",
       "Five section kinds: experience, education, projects, skills, custom",
       "ATS-safe template — one column, real text, standard headings",
+      "Three layouts, and a header you arrange yourself",
+      "Named versions you can preview and restore",
       "PDF export",
-      "Named versions and history",
     ],
   },
   {

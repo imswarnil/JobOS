@@ -14,6 +14,7 @@ import {
 } from "@/lib/sidebar";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
 
 /**
  * Holds the two pieces of shell state — whether the mobile drawer is open, and
@@ -130,6 +131,11 @@ export function AppShell({
         <Topbar onOpenNav={() => setNavOpen(true)} />
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>
+
+      {/* Offered only once someone is actually using the app — asking a
+          first-time visitor to install is how install prompts earned their
+          reputation. */}
+      <InstallPrompt />
     </div>
   );
 }
