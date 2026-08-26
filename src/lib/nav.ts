@@ -5,6 +5,7 @@ import {
   Briefcase,
   Building2,
   Send,
+  Sparkles,
   Settings,
   ShieldCheck,
   type LucideIcon,
@@ -56,6 +57,13 @@ export const NAV: NavGroup[] = [
         icon: NotebookPen,
         description:
           "Work, lessons, walls, tricks — everything that made you better.",
+      },
+      {
+        label: "Define my role",
+        href: "/role",
+        icon: Sparkles,
+        description:
+          "What should you actually call yourself? Read from your own entries.",
       },
       {
         label: "Career setup",

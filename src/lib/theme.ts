@@ -1,20 +1,27 @@
+"use client";
+
+import {
+  THEME_COOKIE,
+  isTheme,
+  readPreference,
+  writePreference,
+  type ThemeChoice,
+} from "@/lib/preferences";
+
+export type { ThemeChoice };
+
 /**
  * THEME STORE
  * ===========
  *
- * A three-line external store rather than a `useState` + `useEffect` pair.
+ * The theme genuinely lives outside React — it is an attribute on <html> and
+ * a cookie the server reads. Reading it into state in an effect would mean
+ * rendering the wrong value first and correcting it, which is both a
+ * cascading render and a visible flicker on the toggle.
+ * `useSyncExternalStore` reads the real value on the first client render.
  *
- * The theme genuinely lives outside React — it is an attribute on <html> that
- * an inline script sets before hydration, plus a `localStorage` key. Reading
- * it into state in an effect would mean rendering the wrong value first and
- * correcting it, which is both a cascading render and a visible flicker on the
- * toggle. `useSyncExternalStore` reads the real value on the first client
- * render instead.
+ * The cookie is what removes the flash: see lib/preferences.ts.
  */
-
-export type ThemeChoice = "light" | "dark" | "system";
-
-const KEY = "jobos-theme";
 
 const listeners = new Set<() => void>();
 
@@ -33,39 +40,35 @@ export function subscribe(listener: () => void) {
 }
 
 export function getSnapshot(): ThemeChoice {
-  try {
-    return (localStorage.getItem(KEY) as ThemeChoice | null) ?? "system";
-  } catch {
-    return "system";
-  }
+  const stored = readPreference(THEME_COOKIE);
+  return isTheme(stored) ? stored : "system";
 }
 
 /**
- * The server has no idea what the visitor prefers, and guessing would cause a
- * hydration mismatch. "system" is the honest answer — the inline script in the
- * root layout has already put the *resolved* theme on <html> by this point, so
- * only the toggle's own highlight is briefly indeterminate.
+ * The server renders whatever the cookie said, and the cookie is the source of
+ * truth on the client too — so this matches and there is no mismatch to
+ * reconcile. "system" is the honest default for a first-time visitor.
  */
 export function getServerSnapshot(): ThemeChoice {
   return "system";
 }
 
-/** Stamp the resolved theme on <html> and persist the choice. */
+/**
+ * Persist the choice and reflect it on <html>.
+ *
+ * "system" *removes* the attribute rather than resolving it, so the
+ * `prefers-color-scheme` rules in globals.css take over — the same state the
+ * server renders for a visitor who has never chosen. Resolving it to a
+ * literal here would mean the toggle and a fresh page load disagree the next
+ * time the OS theme changes.
+ */
 export function setTheme(choice: ThemeChoice) {
   const root = document.documentElement;
 
-  if (choice === "system") {
-    localStorage.removeItem(KEY);
-    root.setAttribute(
-      "data-theme",
-      window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light",
-    );
-  } else {
-    localStorage.setItem(KEY, choice);
-    root.setAttribute("data-theme", choice);
-  }
+  writePreference(THEME_COOKIE, choice);
+
+  if (choice === "system") root.removeAttribute("data-theme");
+  else root.setAttribute("data-theme", choice);
 
   emit();
 }

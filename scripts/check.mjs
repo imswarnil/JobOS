@@ -12,8 +12,14 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const EXPECTED_TABLES = [
-  "application", "company", "job", "job_criteria",
+/**
+ * Every table that carries an owner_id — which is every domain table, by
+ * design. Derived rather than counted, so adding a table makes this check
+ * fail loudly until its foreign key is added too, instead of silently
+ * comparing against a stale number.
+ */
+const OWNED_TABLES = [
+  "application", "company", "job", "job_criteria", "llm_usage",
   "project", "resume_master", "resume_version", "work_log",
 ];
 
@@ -39,7 +45,7 @@ const tables = await sql`
 
 const pub = tables.filter((r) => r.s === "public").map((r) => r.t);
 const auth = tables.filter((r) => r.s === "neon_auth").map((r) => r.t);
-const missing = EXPECTED_TABLES.filter((t) => !pub.includes(t));
+const missing = OWNED_TABLES.filter((t) => !pub.includes(t));
 
 check(missing.length === 0, `domain tables (${pub.length})`,
   missing.length ? `missing: ${missing.join(", ")}` : "");
@@ -47,11 +53,18 @@ check(auth.includes("user") && auth.includes("session"),
   `neon_auth tables (${auth.length})`,
   auth.length ? "" : "run: neonctl neon-auth enable");
 
-const [{ n: fks }] = await sql`
-  SELECT count(*)::int AS n FROM information_schema.table_constraints
+const fkRows = await sql`
+  SELECT table_name FROM information_schema.table_constraints
   WHERE constraint_type = 'FOREIGN KEY' AND constraint_name LIKE '%\\_owner\\_fk'`;
-check(fks === 8, `owner foreign keys (${fks}/8)`,
-  fks === 8 ? "" : "run: node scripts/apply-sql.mjs drizzle/0001_owner_foreign_keys.sql");
+const withFk = new Set(fkRows.map((r) => r.table_name));
+const noFk = OWNED_TABLES.filter((t) => !withFk.has(t));
+check(
+  noFk.length === 0,
+  `owner foreign keys (${OWNED_TABLES.length - noFk.length}/${OWNED_TABLES.length})`,
+  noFk.length
+    ? `missing on ${noFk.join(", ")} — run: node scripts/apply-sql.mjs drizzle/manual/*.sql`
+    : "",
+);
 
 const [{ n: migrations }] = await sql`
   SELECT count(*)::int AS n FROM drizzle.__drizzle_migrations`;

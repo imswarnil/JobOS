@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Figtree } from "next/font/google";
-import Script from "next/script";
+
+import { RAIL_COOKIE, THEME_COOKIE, isTheme } from "@/lib/preferences";
 
 import "./globals.css";
 
@@ -34,52 +36,39 @@ export const viewport: Viewport = {
 };
 
 /**
- * Runs before first paint so both the theme and the sidebar state are on
- * <html> by the time any pixels land. Without it a dark-mode user gets a white
- * flash on every fresh document, and a collapsed rail renders expanded and
- * then snaps shut. Kept as a string so it ships inline rather than as a
- * fetched module.
+ * The theme and the rail state come from cookies, read here on the server.
+ *
+ * That is what removes the flash: the attributes are in the HTML from the
+ * first byte, so a dark-mode user never sees a white flare and a collapsed
+ * rail never expands and snaps shut. The usual inline-script trick is not
+ * available — React 19 will not render a script tag inside a component tree,
+ * and next/script's beforeInteractive hits the same wall in the App Router.
+ *
+ * **"system" renders no attribute at all**, which is the important detail.
+ * The server cannot know the OS preference, so resolving it here would mean
+ * guessing — and guessing light for an OS-dark visitor reintroduces exactly
+ * the flash we are removing. Omitting the attribute hands the decision to the
+ * `prefers-color-scheme` block in globals.css, which is already written to
+ * apply to `:root:not([data-theme="light"])`. No JavaScript is involved in
+ * getting a system-preference visitor the right theme.
  */
-const BOOT_SCRIPT = `
-(function () {
-  var el = document.documentElement;
-  try {
-    var stored = localStorage.getItem('jobos-theme');
-    var dark = stored
-      ? stored === 'dark'
-      : window.matchMedia('(prefers-color-scheme: dark)').matches;
-    el.setAttribute('data-theme', dark ? 'dark' : 'light');
-  } catch (e) {
-    el.setAttribute('data-theme', 'light');
-  }
-  try {
-    el.dataset.rail =
-      localStorage.getItem('jobos-rail') === 'collapsed' ? 'collapsed' : 'expanded';
-  } catch (e) {
-    el.dataset.rail = 'expanded';
-  }
-})();
-`;
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const store = await cookies();
+  const stored = store.get(THEME_COOKIE)?.value;
+  const explicit = isTheme(stored) && stored !== "system" ? stored : undefined;
+  const rail =
+    store.get(RAIL_COOKIE)?.value === "collapsed" ? "collapsed" : "expanded";
+
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${figtree.variable} antialiased`}>
-        {/*
-          `beforeInteractive` puts this in the initial HTML ahead of hydration,
-          which is the only way it can do its job. A bare <script> in <head>
-          also lands in the HTML, but React 19 refuses to render one inside a
-          component tree and warns that it will never execute on the client.
-        */}
-        <Script
-          id="jobos-boot"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }}
-        />
-        {children}
-      </body>
+    <html
+      lang="en"
+      data-theme={explicit}
+      data-rail={rail}
+      suppressHydrationWarning
+    >
+      <body className={`${figtree.variable} antialiased`}>{children}</body>
     </html>
   );
 }

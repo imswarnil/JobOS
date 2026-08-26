@@ -1,16 +1,15 @@
+"use client";
+
+import { RAIL_COOKIE, readPreference, writePreference } from "@/lib/preferences";
+
 /**
  * SIDEBAR COLLAPSE STATE
- * ======================
  *
- * Lives outside React for the same reason the theme does: an inline script
- * stamps it on <html> before hydration, so a collapsed rail is already
- * collapsed on first paint instead of expanding and snapping shut.
- *
- * Read through `useSyncExternalStore` rather than an effect, so the first
- * client render sees the real value.
+ * A cookie for the same reason the theme is one: the server stamps
+ * `data-rail` on <html> from the request, so a collapsed rail is already
+ * collapsed in the first painted frame rather than expanding and snapping
+ * shut. See lib/preferences.ts.
  */
-
-const KEY = "jobos-rail";
 
 const listeners = new Set<() => void>();
 
@@ -28,25 +27,16 @@ export function subscribe(listener: () => void) {
 }
 
 export function getSnapshot(): boolean {
-  try {
-    return localStorage.getItem(KEY) === "collapsed";
-  } catch {
-    return false;
-  }
+  return readPreference(RAIL_COOKIE) === "collapsed";
 }
 
-/** The server cannot know; expanded is the safe default and matches the SSR markup. */
+/** Matches the SSR markup, which the server drives from the same cookie. */
 export function getServerSnapshot(): boolean {
   return false;
 }
 
 export function setCollapsed(collapsed: boolean) {
-  try {
-    if (collapsed) localStorage.setItem(KEY, "collapsed");
-    else localStorage.removeItem(KEY);
-  } catch {
-    // Private mode: the toggle still works for this session.
-  }
+  writePreference(RAIL_COOKIE, collapsed ? "collapsed" : "expanded");
   document.documentElement.dataset.rail = collapsed ? "collapsed" : "expanded";
   emit();
 }

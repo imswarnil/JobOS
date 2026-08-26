@@ -206,6 +206,43 @@ export const workLog = pgTable(
 );
 
 /* =============================================================================
+   MODEL USAGE — the rate limit's ledger
+   ==========================================================================*/
+
+/**
+ * One row per model call, successful or not.
+ *
+ * The rate limit is enforced by counting rows in a window rather than by a
+ * counter that gets decremented, because a counter cannot answer "why was I
+ * blocked" and cannot expire on its own. This can: the window is a WHERE
+ * clause, and the rows are their own audit trail.
+ *
+ * Failed calls are recorded too. A provider erroring still cost the shared
+ * key a request, and not counting it turns a retry loop into an unbounded one.
+ */
+export const llmUsage = pgTable(
+  "llm_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    /** Which feature spent it — "define-role", later "tailor-resume". */
+    feature: text("feature").notNull(),
+    /** Which provider actually answered: gemini | groq. */
+    provider: text("provider").notNull(),
+    ok: boolean("ok").notNull().default(true),
+    /** Populated when ok is false, so a failing key is diagnosable. */
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    // The rate-limit query: this person's calls, newest first.
+    index("llm_usage_owner_time_idx").on(t.ownerId, t.createdAt),
+  ],
+);
+
+/* =============================================================================
    MATERIALS — Phases 2 and 3
    ==========================================================================*/
 
@@ -340,4 +377,5 @@ export type Application = typeof application.$inferSelect;
 export type NewApplication = typeof application.$inferInsert;
 export type ApplicationStatus = (typeof applicationStatus.enumValues)[number];
 export type OrgKind = (typeof orgKind.enumValues)[number];
+export type LlmUsage = typeof llmUsage.$inferSelect;
 export type LogType = (typeof logType.enumValues)[number];
