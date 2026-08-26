@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { getAuth } from "@/lib/auth/server";
+import { getAuth, isAuthConfigured } from "@/lib/auth/server";
 
 /**
  * The only way a client component is allowed to touch authentication.
@@ -17,6 +17,16 @@ import { getAuth } from "@/lib/auth/server";
 export interface AuthActionState {
   error?: string;
 }
+
+/**
+ * A deployment missing NEON_AUTH_* used to answer sign-in with a 500 and no
+ * explanation — the browser showed nothing, and the only way to find out was
+ * the server log. Checking first turns the commonest deployment mistake into
+ * a sentence on the form that names the fix.
+ */
+const NOT_CONFIGURED =
+  "Authentication is not configured on this deployment. Set NEON_AUTH_BASE_URL " +
+  "and NEON_AUTH_COOKIE_SECRET in the environment, then redeploy — see docs/DEPLOY.md.";
 
 const credentials = z.object({
   email: z.email("That does not look like an email address."),
@@ -52,6 +62,8 @@ export async function signInAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  if (!isAuthConfigured()) return { error: NOT_CONFIGURED };
+
   const parsed = credentials.safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -71,6 +83,8 @@ export async function signUpAction(
   _prev: AuthActionState,
   formData: FormData,
 ): Promise<AuthActionState> {
+  if (!isAuthConfigured()) return { error: NOT_CONFIGURED };
+
   const parsed = signUpFields.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -88,6 +102,8 @@ export async function signUpAction(
 
 /** Signs in with the seeded demo account, so the tour is one click. */
 export async function signInAsDemoAction(): Promise<AuthActionState> {
+  if (!isAuthConfigured()) return { error: NOT_CONFIGURED };
+
   const email = process.env.DEMO_EMAIL;
   const password = process.env.DEMO_PASSWORD;
 
@@ -110,7 +126,7 @@ export async function signInAsDemoAction(): Promise<AuthActionState> {
 }
 
 export async function signOutAction(): Promise<void> {
-  await getAuth().signOut();
+  if (isAuthConfigured()) await getAuth().signOut();
   redirect("/");
 }
 

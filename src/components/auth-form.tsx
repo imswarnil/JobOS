@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { AlertCircle, Loader2, Sparkles, TriangleAlert } from "lucide-react";
 
 import {
   signInAction,
@@ -24,10 +24,13 @@ import { cn } from "@/lib/utils";
 export function AuthForm({
   mode,
   demoEmail,
+  configured = true,
 }: {
   mode: "login" | "signup";
   /** Present only when a demo account is configured on this deployment. */
   demoEmail?: string;
+  /** False when NEON_AUTH_* is missing — nothing here can work. */
+  configured?: boolean;
 }) {
   const isSignup = mode === "signup";
   const action = isSignup ? signUpAction : signInAction;
@@ -36,6 +39,23 @@ export function AuthForm({
     AuthActionState,
     FormData
   >(action, {});
+
+  if (!configured) {
+    return (
+      <div className="space-y-3 rounded-card border border-warning-line/40 bg-warning-bg p-5">
+        <p className="flex items-center gap-2 text-sm font-semibold text-warning-fg">
+          <TriangleAlert className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+          Authentication is not configured here
+        </p>
+        <p className="text-xs leading-relaxed text-warning-fg">
+          This deployment is missing <code>NEON_AUTH_BASE_URL</code> and{" "}
+          <code>NEON_AUTH_COOKIE_SECRET</code>, so nobody can sign in. Add them
+          to the environment and redeploy — <code>docs/DEPLOY.md</code> lists
+          every variable and where each one comes from.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthForm } from "@/components/auth-form";
+import { isAuthConfigured } from "@/lib/auth/server";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -20,7 +21,11 @@ export default function LoginPage() {
         </p>
       </div>
 
-      <AuthForm mode="login" demoEmail={process.env.DEMO_EMAIL} />
+      <AuthForm
+        mode="login"
+        demoEmail={process.env.DEMO_EMAIL}
+        configured={isAuthConfigured()}
+      />
 
       <p className="text-center text-sm text-fg-muted">
         New here?{" "}
