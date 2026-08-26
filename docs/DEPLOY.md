@@ -48,8 +48,10 @@ problem, give previews their own Neon branch rather than sharing production.
 <https://vercel.com/new> → import `imswarnil/JobOS`. Framework detection
 picks Next.js; leave every build setting alone.
 
-Paste the environment variables before the first build, or it will fail at
-boot on the missing `NEON_AUTH_COOKIE_SECRET`.
+Paste the environment variables in. The build itself does not need them —
+the auth client is constructed on first request, not at import, so a build
+with an empty environment still succeeds. But the *running* app does: without
+them, `/` renders as a signed-out visitor and any sign-in attempt fails.
 
 ### 2 · Add the domain
 

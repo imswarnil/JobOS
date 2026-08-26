@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth/server";
+import { getAuth, isAuthConfigured } from "@/lib/auth/server";
 
 /**
  * WHO IS ASKING
@@ -46,7 +46,11 @@ function initialsOf(name: string, email: string): string {
  * Use `export const dynamic = "force-dynamic"`.
  */
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const { data } = await auth.getSession();
+  // A deployment with no auth configured should render the public homepage as
+  // a signed-out visitor rather than crash with a 500.
+  if (!isAuthConfigured()) return null;
+
+  const { data } = await getAuth().getSession();
   const user = data?.user;
   if (!user) return null;
 

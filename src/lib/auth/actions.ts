@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth/server";
+import { getAuth } from "@/lib/auth/server";
 
 /**
  * The only way a client component is allowed to touch authentication.
@@ -59,7 +59,7 @@ export async function signInAction(
     return { error: parsed.error.issues[0].message };
   }
 
-  const { error } = await auth.signIn.email(parsed.data);
+  const { error } = await getAuth().signIn.email(parsed.data);
   if (error) return { error: readableError(error.message) };
 
   // Outside the try/catch-free path above because redirect() throws by design.
@@ -79,7 +79,7 @@ export async function signUpAction(
     return { error: parsed.error.issues[0].message };
   }
 
-  const { error } = await auth.signUp.email(parsed.data);
+  const { error } = await getAuth().signUp.email(parsed.data);
   if (error) return { error: readableError(error.message) };
 
   redirect("/dashboard");
@@ -97,7 +97,7 @@ export async function signInAsDemoAction(): Promise<AuthActionState> {
     };
   }
 
-  const { error } = await auth.signIn.email({ email, password });
+  const { error } = await getAuth().signIn.email({ email, password });
   if (error) {
     return {
       error:
@@ -109,6 +109,6 @@ export async function signInAsDemoAction(): Promise<AuthActionState> {
 }
 
 export async function signOutAction(): Promise<void> {
-  await auth.signOut();
+  await getAuth().signOut();
   redirect("/");
 }
