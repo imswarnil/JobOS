@@ -92,6 +92,8 @@ two are wrong.
 
 ```bash
 pnpm dev          # needs a real .env.local — there is no offline mode
+pnpm stop         # kill this project's servers only — see below
+pnpm dev:clean    # stop, then dev
 pnpm build
 pnpm typecheck    # tsc --noEmit
 pnpm lint
@@ -103,6 +105,22 @@ pnpm db:seed      # demo account + 15 entries across all six types
 Both lint and typecheck must stay clean. Two lint rules bite often:
 `react-hooks/set-state-in-effect` (adjust state during render instead — see
 `app-shell.tsx` and `entry-composer.tsx`) and unused args (prefix `_`).
+
+## Stopping the local servers
+
+`pnpm stop` (`scripts/stop.sh`) kills the dev server, `next start`, drizzle
+studio and their `pnpm` wrappers, then frees 3000, 3001 and 4983.
+
+It only kills a process whose **working directory is this repo**. That is the
+whole point: a sibling Next app — sometimes under a different macOS account —
+holds :3000 on this machine, which is why `pnpm dev` keeps landing on 3001.
+Those are reported, never killed. `--force` overrides for same-user processes;
+it cannot cross accounts without sudo.
+
+`lsof` only sees sockets owned by the user running it, so a port held by
+another account looks free to it. The script falls back to `netstat` for that
+case — otherwise a busy port reads as available and the failure surfaces much
+later as Next silently choosing a different port.
 
 ## Gotchas already paid for
 

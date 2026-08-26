@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { getAuth, isAuthConfigured } from "@/lib/auth/server";
@@ -41,11 +42,20 @@ function initialsOf(name: string, email: string): string {
 /**
  * Returns the signed-in user, or null.
  *
+ * **Memoised per request** with React's `cache()`, and that is not a
+ * micro-optimisation. Every owner-scoped query helper calls `ownerId()`,
+ * which calls this — so rendering the journal was making six separate HTTP
+ * round-trips to the Neon Auth server to ask the same question six times.
+ * Deduped, it asks once and the other five are free.
+ *
+ * The cache lives for exactly one request, so there is no risk of one
+ * visitor's session leaking into another's render.
+ *
  * Any server component calling this must opt out of static rendering — it
  * reads cookies, so a prerendered page would bake in one visitor's session.
  * Use `export const dynamic = "force-dynamic"`.
  */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async function getCurrentUser(): Promise<CurrentUser | null> {
   // A deployment with no auth configured should render the public homepage as
   // a signed-out visitor rather than crash with a 500.
   if (!isAuthConfigured()) return null;
@@ -62,7 +72,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     initials: initialsOf(user.name, user.email),
     role: (user as { role?: string | null }).role ?? null,
   };
-}
+});
 
 /**
  * The guard for anything behind the sign-in wall. Redirects rather than

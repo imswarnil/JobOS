@@ -127,40 +127,57 @@ export async function dashboardStats() {
   const db = getDb();
   const owner = await ownerId();
 
-  const [totals] = await db
-    .select({ total: count() })
-    .from(workLog)
-    .where(eq(workLog.ownerId, owner));
+  /**
+   * All three in one round trip's worth of wall time.
+   *
+   * They were sequential, which on a database ~150ms away meant ~450ms of
+   * the dashboard's render was spent waiting for three questions that have
+   * nothing to say to each other. Independent queries should never be
+   * awaited in series.
+   */
+  const [[totals], [week], streakRows] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(workLog)
+      .where(eq(workLog.ownerId, owner)),
 
-  const [week] = await db
-    .select({ n: count() })
-    .from(workLog)
-    .where(
-      and(
-        eq(workLog.ownerId, owner),
-        gte(workLog.occurredOn, sql`current_date - interval '7 days'`),
+    db
+      .select({ n: count() })
+      .from(workLog)
+      .where(
+        and(
+          eq(workLog.ownerId, owner),
+          gte(workLog.occurredOn, sql`current_date - interval '7 days'`),
+        ),
       ),
-    );
 
-  const streakRows = await db.execute(sql`
-    WITH days AS (
-      SELECT DISTINCT occurred_on AS d
-      FROM work_log
-      WHERE owner_id = ${owner}
-    ),
-    grouped AS (
-      SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int AS run
-      FROM days
-    )
-    SELECT count(*)::int AS streak
-    FROM grouped
-    WHERE run = (
-      SELECT run FROM grouped
-      WHERE d IN (current_date, current_date - 1)
-      ORDER BY d DESC
-      LIMIT 1
-    )
-  `);
+    /**
+     * The streak, computed in SQL rather than by pulling every row into Node:
+     * number each distinct day, subtract that number from the date, and every
+     * consecutive day collapses to the same value. The size of the group
+     * containing today — or yesterday, so the streak survives until you have
+     * had a chance to write — is the current streak.
+     */
+    db.execute(sql`
+      WITH days AS (
+        SELECT DISTINCT occurred_on AS d
+        FROM work_log
+        WHERE owner_id = ${owner}
+      ),
+      grouped AS (
+        SELECT d, d - (ROW_NUMBER() OVER (ORDER BY d))::int AS run
+        FROM days
+      )
+      SELECT count(*)::int AS streak
+      FROM grouped
+      WHERE run = (
+        SELECT run FROM grouped
+        WHERE d IN (current_date, current_date - 1)
+        ORDER BY d DESC
+        LIMIT 1
+      )
+    `),
+  ]);
 
   const streak = Number(
     (streakRows.rows?.[0] as { streak?: number } | undefined)?.streak ?? 0,

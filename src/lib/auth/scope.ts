@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { requireUser } from "@/lib/auth";
 
 /**
@@ -27,11 +29,17 @@ export interface Scope {
   // TODO(Phase 6): organizationId?: string;
 }
 
-/** Throws (via redirect) if nobody is signed in — callers get a real id. */
-export async function scope(): Promise<Scope> {
+/**
+ * Throws (via redirect) if nobody is signed in — callers get a real id.
+ *
+ * Memoised per request, like `getCurrentUser()` underneath it: a page that
+ * runs five owner-scoped queries should resolve the owner once, not five
+ * times.
+ */
+export const scope = cache(async function scope(): Promise<Scope> {
   const user = await requireUser();
   return { ownerId: user.id };
-}
+});
 
 /** Shorthand for the common case of needing just the id. */
 export async function ownerId(): Promise<string> {

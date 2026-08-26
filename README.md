@@ -85,6 +85,23 @@ cp .env.example .env.local     # then fill it in — see below
 pnpm dev                       # http://localhost:3000
 ```
 
+### `dev` vs `preview`
+
+`pnpm dev` compiles each route the first time you visit it and recompiles on
+every edit, which is what you want while writing code and not what you want
+while *testing* it. For clicking through the app, use a production build:
+
+```bash
+pnpm preview          # build, then serve it
+pnpm preview:serve    # skip the build if nothing changed
+```
+
+Measured on this app, framework overhead is about **3ms** per page. Almost all
+of the rest is round trips: the session lookup and the database queries, both
+of which cross the Atlantic to `us-east-2`. Neither `dev` nor `preview`
+changes that — a page that feels slow is usually waiting on the network, not
+on Next.js. Put the Neon project in the region nearest you if it matters.
+
 JobOS needs a real database and a real auth instance; there is no offline mode.
 Both come from one Neon project, and every value in `.env.local` can be
 produced from the CLI:
@@ -185,7 +202,10 @@ from the session, never from the form.
 
 | | |
 | --- | --- |
-| `pnpm dev` | development server |
+| `pnpm dev` | development server (compiles on demand) |
+| `pnpm preview` | build and serve — what to use for click-testing |
+| `pnpm preview:serve` | serve the last build without rebuilding |
+| `pnpm check` | build + typecheck + lint, all three |
 | `pnpm build` | production build |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | `tsc --noEmit` |
