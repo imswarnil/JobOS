@@ -11,7 +11,14 @@ import { signOutAction } from "@/lib/auth/actions";
  * A plain popover rather than a headless-UI dependency — the shell needs one
  * menu, and one menu is not worth a component library.
  */
-export function UserMenu({ user }: { user: CurrentUser }) {
+export function UserMenu({
+  user,
+  collapsed = false,
+}: {
+  user: CurrentUser;
+  /** Collapsed shows the avatar alone; the menu still opens. */
+  collapsed?: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
 
@@ -44,29 +51,37 @@ export function UserMenu({ user }: { user: CurrentUser }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-label={collapsed ? `Account: ${user.name}` : undefined}
+        title={collapsed ? user.name : undefined}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-control p-2 text-left",
+          "flex items-center rounded-control text-left",
           "transition-colors duration-200 ease-out hover:bg-sunken",
+          collapsed ? "w-full justify-center p-1.5" : "w-full gap-2.5 p-2",
           open && "bg-sunken",
         )}
       >
         <Avatar user={user} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[0.8125rem] font-semibold text-fg">
-            {user.name}
-          </span>
-          <span className="block truncate text-[0.6875rem] text-fg-subtle">
-            {user.email}
-          </span>
-        </span>
-        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[0.8125rem] font-semibold text-fg">
+                {user.name}
+              </span>
+              <span className="block truncate text-[0.6875rem] text-fg-subtle">
+                {user.email}
+              </span>
+            </span>
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-fg-faint" />
+          </>
+        )}
       </button>
 
       {open ? (
         <div
           role="menu"
           className={cn(
-            "absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-full min-w-56",
+            "fx-pop absolute bottom-[calc(100%+0.5rem)] left-0 z-50 min-w-56",
+            collapsed ? "w-56" : "w-full",
             "rounded-card border border-line bg-raised p-1.5 shadow-e3",
           )}
         >

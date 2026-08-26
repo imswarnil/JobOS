@@ -33,21 +33,29 @@ export const viewport: Viewport = {
 };
 
 /**
- * Runs before first paint so the correct theme is on <html> by the time any
- * pixels land — without it, a dark-mode user gets a white flash on every
- * navigation to a fresh document. Kept as a string so it ships inline rather
- * than as a fetched module.
+ * Runs before first paint so both the theme and the sidebar state are on
+ * <html> by the time any pixels land. Without it a dark-mode user gets a white
+ * flash on every fresh document, and a collapsed rail renders expanded and
+ * then snaps shut. Kept as a string so it ships inline rather than as a
+ * fetched module.
  */
-const THEME_SCRIPT = `
+const BOOT_SCRIPT = `
 (function () {
+  var el = document.documentElement;
   try {
     var stored = localStorage.getItem('jobos-theme');
     var dark = stored
       ? stored === 'dark'
       : window.matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    el.setAttribute('data-theme', dark ? 'dark' : 'light');
   } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'light');
+    el.setAttribute('data-theme', 'light');
+  }
+  try {
+    el.dataset.rail =
+      localStorage.getItem('jobos-rail') === 'collapsed' ? 'collapsed' : 'expanded';
+  } catch (e) {
+    el.dataset.rail = 'expanded';
   }
 })();
 `;
@@ -58,7 +66,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
       </head>
       <body className={`${figtree.variable} antialiased`}>{children}</body>
     </html>

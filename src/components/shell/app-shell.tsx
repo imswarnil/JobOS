@@ -6,14 +6,24 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/lib/auth";
+import {
+  getServerSnapshot,
+  getSnapshot,
+  subscribe,
+  toggleCollapsed,
+} from "@/lib/sidebar";
 import { Sidebar } from "@/components/shell/sidebar";
 import { Topbar } from "@/components/shell/topbar";
 
 /**
- * Holds the one piece of state the shell needs — whether the mobile drawer is
- * open — and nothing else. `children` arrives as a prop from the server
- * layout, so marking this "use client" does not drag the page content across
- * the boundary with it.
+ * Holds the two pieces of shell state — whether the mobile drawer is open, and
+ * whether the desktop rail is collapsed — and nothing else. `children` arrives
+ * as a prop from the server layout, so marking this "use client" does not drag
+ * the page content across the boundary with it.
+ *
+ * Collapse is read from an external store rather than state, so the value the
+ * inline boot script already stamped on <html> is what the first client render
+ * sees. No flash, no snap.
  */
 export function AppShell({
   user,
@@ -25,9 +35,15 @@ export function AppShell({
   const [navOpen, setNavOpen] = React.useState(false);
   const pathname = usePathname();
 
+  const collapsed = React.useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot,
+  );
+
   // Following a link on mobile should close the drawer behind you. Adjusted
   // during render rather than in an effect: the drawer must already be closed
-  // in the same commit that paints the new route, or it flashes open over it.
+  // in the same commit that paints the new route, or it flashes over it.
   const [renderedPath, setRenderedPath] = React.useState(pathname);
   if (renderedPath !== pathname) {
     setRenderedPath(pathname);
@@ -37,6 +53,17 @@ export function AppShell({
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setNavOpen(false);
+
+      // `[` toggles the rail — a single keystroke, and it does not collide
+      // with typing because we ignore it inside any editable field.
+      const el = event.target as HTMLElement | null;
+      const typing =
+        el?.isContentEditable ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(el?.tagName ?? "");
+      if (event.key === "[" && !typing && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        toggleCollapsed();
+      }
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -44,12 +71,22 @@ export function AppShell({
 
   return (
     <div className="flex min-h-svh">
-      {/* Desktop rail — always present, never animated. */}
-      <aside className="fixed inset-y-0 left-0 hidden w-rail lg:block">
-        <Sidebar user={user} />
+      {/* Desktop rail. Width animates; the content column follows it. */}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-20 hidden lg:block",
+          "transition-[width] duration-300 ease-out",
+          collapsed ? "w-[3.75rem]" : "w-rail",
+        )}
+      >
+        <Sidebar
+          user={user}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+        />
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — always full width, never collapsed. */}
       <div
         className={cn(
           "fixed inset-0 z-50 lg:hidden",
@@ -83,7 +120,13 @@ export function AppShell({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-(--container-rail)">
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col",
+          "transition-[padding] duration-300 ease-out",
+          collapsed ? "lg:pl-[3.75rem]" : "lg:pl-(--container-rail)",
+        )}
+      >
         <Topbar onOpenNav={() => setNavOpen(true)} />
         <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
       </div>
