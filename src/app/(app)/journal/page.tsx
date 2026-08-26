@@ -13,6 +13,7 @@ import type { LogType } from "@/lib/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { EntryCard } from "@/components/journal/entry-card";
 import { EntryComposer } from "@/components/journal/entry-composer";
+import { JournalSearch } from "@/components/journal/journal-search";
 import { TypeFilter } from "@/components/journal/type-filter";
 
 export const metadata: Metadata = { title: "Journal" };
@@ -49,8 +50,11 @@ export default async function JournalPage({
 
       <EntryComposer companies={companies} projects={projects} />
 
-      <Suspense fallback={<div className="h-8" />}>
-        <TypeFilter counts={counts} total={total} />
+      <Suspense fallback={<div className="h-24" />}>
+        <div className="space-y-4">
+          <JournalSearch />
+          <TypeFilter counts={counts} total={total} />
+        </div>
       </Suspense>
 
       {entries.length ? (
@@ -60,20 +64,49 @@ export default async function JournalPage({
           ))}
         </div>
       ) : (
-        <EmptyState filtered={Boolean(type)} type={type} />
+        <EmptyState
+          type={type}
+          query={params.q?.trim() || undefined}
+          hasAny={total > 0}
+        />
       )}
     </div>
   );
 }
 
 function EmptyState({
-  filtered,
   type,
+  query,
+  hasAny,
 }: {
-  filtered: boolean;
   type?: LogType;
+  query?: string;
+  hasAny: boolean;
 }) {
   const meta = type ? logTypeMeta(type) : null;
+  const filtered = Boolean(type) || Boolean(query);
+
+  // Three different nothings, and they mean different things: no entries at
+  // all, none of this kind, or none matching a search.
+  let heading: string;
+  let body: string;
+
+  if (query) {
+    heading = `Nothing matches “${query}”`;
+    body = type
+      ? `No ${meta?.label.toLowerCase()} entries mention that. Try clearing the filter, or searching for something else.`
+      : "Search covers the title, the entry itself and the impact. Try a shorter phrase.";
+  } else if (type) {
+    heading = `No ${meta?.label.toLowerCase()} entries yet`;
+    body = meta?.prompt ?? "";
+  } else if (hasAny) {
+    heading = "Nothing here";
+    body = "Clear the filters to see your entries.";
+  } else {
+    heading = "Nothing logged yet";
+    body =
+      "The hardest part is the first entry. Write down one thing from today — it does not have to be impressive, it has to be true.";
+  }
 
   return (
     <div className="relative overflow-hidden rounded-card border border-dashed border-line-strong bg-surface px-6 py-14 text-center">
@@ -86,14 +119,8 @@ function EmptyState({
             <NotebookPen className="h-5 w-5" strokeWidth={1.75} />
           )}
         </span>
-        <h3 className="text-base font-semibold text-fg">
-          {filtered ? `No ${meta?.label.toLowerCase()} entries yet` : "Nothing logged yet"}
-        </h3>
-        <p className="text-sm leading-relaxed text-fg-muted">
-          {filtered
-            ? meta?.prompt
-            : "The hardest part is the first entry. Write down one thing from today — it does not have to be impressive, it has to be true."}
-        </p>
+        <h3 className="text-base font-semibold text-fg">{heading}</h3>
+        <p className="text-sm leading-relaxed text-fg-muted">{body}</p>
       </div>
     </div>
   );

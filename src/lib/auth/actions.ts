@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
@@ -111,4 +112,24 @@ export async function signInAsDemoAction(): Promise<AuthActionState> {
 export async function signOutAction(): Promise<void> {
   await getAuth().signOut();
   redirect("/");
+}
+
+/** Update the signed-in user's display name. */
+export async function updateProfileAction(
+  _prev: AuthActionState & { ok?: boolean },
+  formData: FormData,
+): Promise<AuthActionState & { ok?: boolean }> {
+  const parsed = z
+    .object({ name: z.string().trim().min(1, "Please enter your name.").max(120) })
+    .safeParse({ name: formData.get("name") });
+
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const { error } = await getAuth().updateUser({ name: parsed.data.name });
+  if (error) return { error: readableError(error.message) };
+
+  // The name shows in the sidebar and the dashboard greeting, both rendered
+  // from the session on the server.
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

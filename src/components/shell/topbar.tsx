@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Search } from "lucide-react";
 
@@ -41,21 +42,20 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
         </p>
       </div>
 
-      {/* TODO(Phase 1): wire to a real command palette over logs, jobs and
-          applications. Inert in Phase 0, but it holds its place in the layout. */}
-      <button
-        type="button"
+      {/* Sends you to the journal, where the real search lives. A command
+          palette spanning jobs and applications belongs to Phase 4, when
+          there is something else to search.
+          TODO(Phase 4): promote to a ⌘K palette across all record types. */}
+      <Link
+        href="/journal"
         className={cn(
           "hidden h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 md:flex",
           "text-xs text-fg-faint transition-colors duration-200 ease-out hover:border-line-strong hover:text-fg-muted",
         )}
       >
         <Search className="h-3.5 w-3.5" strokeWidth={1.75} />
-        <span>Search</span>
-        <kbd className="ml-4 rounded-sm border border-line px-1.5 py-px font-sans text-[0.625rem] font-semibold text-fg-faint">
-          ⌘K
-        </kbd>
-      </button>
+        <span>Search entries</span>
+      </Link>
 
       <ThemeToggle />
     </header>

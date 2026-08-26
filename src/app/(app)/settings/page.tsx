@@ -4,15 +4,13 @@ import { Bot, Braces, Database, Download, Palette, Trash2, User } from "lucide-r
 import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
-import { Avatar } from "@/components/shell/user-menu";
+import { ProfileForm } from "@/components/settings/profile-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -46,32 +44,7 @@ export default async function SettingsPage() {
             Used on your resume and as the sender identity on applications.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-center gap-4">
-            <Avatar user={user} className="h-14 w-14 rounded-card text-sm" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-fg">
-                {user.name}
-              </p>
-              <p className="truncate text-xs text-fg-subtle">{user.email}</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Full name" htmlFor="settings-name">
-              <Input id="settings-name" defaultValue={user.name} disabled />
-            </Field>
-            <Field label="Email" htmlFor="settings-email">
-              <Input id="settings-email" defaultValue={user.email} disabled />
-            </Field>
-          </div>
-        </CardContent>
-        <CardFooter className="justify-between">
-          <p className="text-xs text-fg-subtle">
-            Editable once accounts are real.
-          </p>
-          <Button disabled>Save changes</Button>
-        </CardFooter>
+        <ProfileForm user={user} />
       </Card>
 
       <Card>
@@ -165,17 +138,31 @@ export default async function SettingsPage() {
             support request.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          {/* TODO(Phase 1): export every owner-scoped table as JSON. */}
-          <Button disabled>
-            <Download className="h-4 w-4" strokeWidth={1.75} />
-            Export everything
-          </Button>
-          {/* TODO(Phase 1): destructive, needs a typed confirmation. */}
-          <Button variant="danger" disabled>
-            <Trash2 className="h-4 w-4" strokeWidth={1.75} />
-            Delete account
-          </Button>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {/* A plain authenticated GET — every table this account owns, as
+                one JSON file. Scoped by session, so there is no parameter to
+                tamper with. */}
+            <a
+              href="/api/export"
+              className="inline-flex h-10 items-center gap-2 rounded-control border border-line bg-surface px-4 text-sm font-medium text-fg transition-colors duration-200 ease-out hover:border-line-strong hover:bg-sunken"
+            >
+              <Download className="h-4 w-4" strokeWidth={1.75} />
+              Export everything
+            </a>
+            {/* TODO(Phase 2): destructive and irreversible — needs a typed
+                confirmation before it is worth shipping. The cascade is
+                already in place: deleting the auth user takes every owned row
+                with it. */}
+            <Button variant="danger" disabled>
+              <Trash2 className="h-4 w-4" strokeWidth={1.75} />
+              Delete account
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-fg-subtle">
+            The export is every row you own — journal, companies, projects,
+            resumes, jobs and applications — as JSON, with nothing held back.
+          </p>
         </CardContent>
       </Card>
     </div>
