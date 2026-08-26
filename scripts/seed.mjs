@@ -211,6 +211,7 @@ const ENTRIES = [
 const owner = await ensureDemoUser();
 
 console.log("· clearing existing demo data");
+await sql`DELETE FROM resume_version WHERE owner_id = ${owner}`;
 await sql`DELETE FROM work_log WHERE owner_id = ${owner}`;
 await sql`DELETE FROM project  WHERE owner_id = ${owner}`;
 await sql`DELETE FROM company  WHERE owner_id = ${owner}`;
@@ -249,6 +250,141 @@ for (const e of ENTRIES) {
     )`;
 }
 console.log(`✓ ${ENTRIES.length} journal entries`);
+
+/* ── 4 · the master resume ───────────────────────────────────────────────── */
+
+/**
+ * A resume built from the same career the journal describes, so the demo
+ * hangs together: the billing run in the journal is the billing bullet here.
+ */
+const uid = () => crypto.randomUUID();
+
+const RESUME = {
+  basics: {
+    name: DEMO_NAME ?? "Demo User",
+    headline: "Senior Backend Engineer",
+    email: DEMO_EMAIL,
+    phone: "+91 90000 00000",
+    location: "Bengaluru, India",
+    summary:
+      "Backend engineer working on billing, data migrations and internal tooling. I like the unglamorous problems — the nightly job nobody wants to touch, the migration that has to run without downtime.",
+    links: [
+      { id: uid(), label: "GitHub", url: "https://github.com/imswarnil" },
+      { id: uid(), label: "Website", url: "https://imswarnil.com" },
+    ],
+  },
+  sections: [
+    {
+      id: uid(),
+      title: "Experience",
+      kind: "experience",
+      items: [
+        {
+          id: uid(),
+          title: "Senior Backend Engineer",
+          subtitle: "Northwind Logistics",
+          location: "Remote",
+          startDate: "Sep 2025",
+          endDate: "",
+          current: true,
+          url: "",
+          bullets: [
+            "Cut the nightly billing run from 3h04m to 18 minutes by batching per-line-item customer lookups into one query per run.",
+            "Migrated 12M invoice rows to a new engine with zero downtime, using resumable 5,000-row batches driven by a cursor table.",
+            "Rebuilt the dispatcher board on a windowed renderer, taking filter changes from ~2.4s to under 200ms for 1,400 active shipments.",
+          ],
+          tags: ["typescript", "postgres", "react"],
+        },
+        {
+          id: uid(),
+          title: "Backend Engineer",
+          subtitle: "BrightPath Consulting",
+          location: "Bengaluru",
+          startDate: "Jun 2024",
+          endDate: "Jul 2025",
+          current: false,
+          url: "",
+          bullets: [
+            "Replaced a 40-field manual client setup with a guided flow, taking median onboarding from 9 days to 2.",
+            "Became the default onboarding path for every new client that quarter.",
+          ],
+          tags: ["salesforce", "apex"],
+        },
+      ],
+    },
+    {
+      id: uid(),
+      title: "Projects",
+      kind: "projects",
+      items: [
+        {
+          id: uid(),
+          title: "JobOS",
+          subtitle: "Personal project",
+          location: "",
+          startDate: "2026",
+          endDate: "",
+          current: true,
+          url: "https://job.imswarnil.com",
+          bullets: [
+            "A career operating system: log daily work, generate a resume from the record, tailor it to a job description using only real facts.",
+            "Next.js 16, Neon Postgres and Neon Auth, with every domain row owner-scoped behind a real foreign key.",
+          ],
+          tags: ["nextjs", "neon", "drizzle"],
+        },
+      ],
+    },
+    {
+      id: uid(),
+      title: "Education",
+      kind: "education",
+      items: [
+        {
+          id: uid(),
+          title: "BSc Computer Science",
+          subtitle: "University of Somewhere",
+          location: "",
+          startDate: "2020",
+          endDate: "2024",
+          current: false,
+          url: "",
+          bullets: [],
+          tags: [],
+        },
+      ],
+    },
+    {
+      id: uid(),
+      title: "Skills",
+      kind: "skills",
+      items: [
+        {
+          id: uid(), title: "Languages", subtitle: "", location: "",
+          startDate: "", endDate: "", current: false, url: "", bullets: [],
+          tags: ["TypeScript", "SQL", "Go", "Python"],
+        },
+        {
+          id: uid(), title: "Data", subtitle: "", location: "",
+          startDate: "", endDate: "", current: false, url: "", bullets: [],
+          tags: ["PostgreSQL", "Drizzle ORM", "Neon", "Redis"],
+        },
+        {
+          id: uid(), title: "Platform", subtitle: "", location: "",
+          startDate: "", endDate: "", current: false, url: "", bullets: [],
+          tags: ["Next.js", "React", "Vercel", "GitHub Actions"],
+        },
+      ],
+    },
+  ],
+};
+
+await sql`DELETE FROM resume_master WHERE owner_id = ${owner}`;
+await sql`
+  INSERT INTO resume_master (owner_id, data)
+  VALUES (${owner}, ${JSON.stringify(RESUME)}::jsonb)`;
+const sectionCount = RESUME.sections.length;
+const entryCount = RESUME.sections.reduce((n, s) => n + s.items.length, 0);
+console.log(`\u2713 master resume (${sectionCount} sections, ${entryCount} entries)`);
 
 const byType = await sql`
   SELECT type, count(*)::int AS n FROM work_log WHERE owner_id = ${owner}

@@ -54,11 +54,13 @@ export const PHASES: Phase[] = [
     id: "P2",
     title: "Resume Builder",
     summary:
-      "A structured master resume you edit in the browser and export as an ATS-friendly PDF.",
-    status: "planned",
+      "A structured master resume you edit in the browser and export as an ATS-friendly PDF. Sections are yours to invent — the app decides how entries render, not what they are called.",
+    status: "building",
     deliverables: [
-      "Master resume editor",
-      "ATS-safe template",
+      "Master resume editor with a live document preview",
+      "Sections you can add, rename, reorder and delete",
+      "Five section kinds: experience, education, projects, skills, custom",
+      "ATS-safe template — one column, real text, standard headings",
       "PDF export",
       "Named versions and history",
     ],

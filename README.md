@@ -17,7 +17,7 @@ Or sign in with the credentials directly:
 | **Password** | `jobos-demo-60645d8d` |
 
 It is a real account, not a mock: 15 journal entries across all six log types,
-two companies and three projects. Write in it, delete things, break it — run
+two companies, three projects and a filled-in resume. Write in it, delete things, break it — run
 `pnpm db:seed` to reset it to a known state.
 
 These credentials are public on purpose. The account holds nothing but seed
@@ -34,7 +34,7 @@ Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 | --- | --- | --- |
 | **0 · Foundation** | ✅ shipped | Design language, app shell, schema, seams |
 | **1 · Work Journal** | 🔨 in progress | Real accounts, six log types, entry CRUD |
-| 2 · Resume Builder | planned | Master resume, ATS PDF |
+| **2 · Resume Builder** | 🔨 in progress | Section editor, live ATS preview |
 | 3 · JD tailoring | planned | Gemini rewrite from real facts |
 | 4–5 · Jobs & agent | planned | Public job APIs, pipeline, scheduled agent |
 | 6 · Stretch | planned | Teams, billing |
@@ -139,7 +139,7 @@ src/
 │   ├── (app)/                  signed-in area — requireUser() guards the layout
 │   │   ├── dashboard/          real stats, streak, latest entries
 │   │   ├── journal/            ✅ six log types, composer, filters
-│   │   ├── resume/             P2 placeholder
+│   │   ├── resume/             ✅ section editor + live ATS preview
 │   │   ├── jobs/               P4 placeholder
 │   │   ├── applications/       P4 placeholder
 │   │   ├── settings/           profile, theme, integrations, data

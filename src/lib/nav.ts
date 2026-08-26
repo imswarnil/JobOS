@@ -66,8 +66,7 @@ export const NAV: NavGroup[] = [
         href: "/resume",
         icon: FileText,
         description:
-          "One master resume, many tailored versions — built from your journal.",
-        phase: "P2",
+          "One master resume, built from what you have actually done.",
       },
     ],
   },

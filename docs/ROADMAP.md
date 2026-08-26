@@ -45,13 +45,20 @@ The shell, the design language, and the seams every later phase plugs into.
 - [ ] Weekly summary digest
 - [x] Export everything as JSON from Settings
 
-## Phase 2 — Resume Builder
+## Phase 2 — Resume Builder `in progress`
 
-- [ ] `ResumeData` Zod schema, mirrored onto `resume_master.data`
-- [ ] Master resume editor
-- [ ] ATS-safe template: one column, real text, standard headings
-- [ ] PDF export via React-PDF
+- [x] `ResumeData` Zod schema over `resume_master.data`
+- [x] Master resume created on first visit, seeded from the profile
+- [x] Header editor — name, headline, contact, summary, labelled links
+- [x] Sections: add, rename, reorder, delete
+- [x] Five section kinds — experience, education, projects, skills, custom —
+      where the kind decides rendering and the heading is yours to name
+- [x] Entries: add, edit, reorder, delete, with per-kind fields
+- [x] Live preview of the ATS-safe document beside the editor
+- [x] Demo account ships with a populated resume
+- [ ] PDF export via React-PDF, rendering the same tree as the preview
 - [ ] Named versions and history
+- [ ] Generate bullets from journal entries
 
 ## Phase 3 — JD-tailored resume
 
