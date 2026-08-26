@@ -92,13 +92,25 @@ If the demo button reports that no demo is configured, `DEMO_EMAIL` /
 ## Doing it from the CLI instead
 
 ```bash
-npm i -g vercel
-vercel login                    # interactive — a browser opens
-vercel link                     # connect this directory to a project
-vercel env pull .env.vercel     # or push with: vercel env add <NAME> production
-vercel --prod                   # deploy
-vercel domains add job.imswarnil.com
+npx vercel login                # interactive — a browser opens
+npx vercel link                 # connect this directory to a project
+pnpm vercel:env                 # push every var from .env.local, all 3 targets
+npx vercel --prod               # deploy
+npx vercel domains add job.imswarnil.com
 ```
+
+`pnpm vercel:env` reads `.env.local` and pipes each value to the CLI on stdin,
+so nothing sensitive lands in argv or your shell history. It adds only what is
+actually set, skips blanks, and leaves existing values alone — pass
+`--replace` to overwrite them:
+
+```bash
+pnpm vercel:env --replace
+```
+
+**Check which account you are on before deploying.** `npx vercel whoami` prints
+the current scope, and `npx vercel switch` changes it. Deploying to the wrong
+scope creates a project in the wrong place, which is tedious to undo.
 
 ## Migrations
 
