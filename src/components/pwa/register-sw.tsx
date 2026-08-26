@@ -16,8 +16,40 @@ import * as React from "react";
  */
 export function RegisterServiceWorker() {
   React.useEffect(() => {
-    if (process.env.NODE_ENV !== "production") return;
     if (!("serviceWorker" in navigator)) return;
+
+    /**
+     * In development, actively tear down any worker on this origin.
+     *
+     * Not merely "do not register" — that is not enough. A worker installed
+     * by `pnpm preview` on port 3001 keeps running when `pnpm dev` later uses
+     * the same port, and it serves /_next/static cache-first. That rule is
+     * safe in production, where filenames are content-hashed, and actively
+     * wrong in development, where Turbopack reuses names like
+     * `[root-of-the-server]__15orhg7._.css` with different contents.
+     *
+     * The symptom is a genuinely confusing one: the server sends correct CSS,
+     * the browser renders stale CSS, and a hard reload does not fix it. This
+     * self-heals instead of leaving a trap on your own machine.
+     */
+    if (process.env.NODE_ENV !== "production") {
+      void (async () => {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
+
+        const names = await caches.keys();
+        await Promise.all(
+          names.filter((n) => n.startsWith("jobos-")).map((n) => caches.delete(n)),
+        );
+
+        if (registrations.length) {
+          console.info(
+            "[pwa] removed a service worker left over from a production build on this port; reload to get fresh assets",
+          );
+        }
+      })();
+      return;
+    }
 
     const register = () => {
       navigator.serviceWorker.register("/sw.js").catch((error) => {

@@ -533,6 +533,56 @@
 	}
 }
 
+/* =============================================================================
+   PRINT
+   The PDF is produced by the browser from this same DOM, which is the whole
+   point: an export rendered from a second template drifts from the preview,
+   and you find out when a company receives the drifted one. Same tree, same
+   CSS, real selectable text — which is also what an ATS needs.
+   ========================================================================== */
+
+@page {
+	/* 18mm reads as a normal document margin at A4 and Letter alike. */
+	size: A4;
+	margin: 18mm 16mm;
+}
+
+@media print {
+	/* Everything that is chrome rather than document. */
+	.no-print { display: none !important; }
+
+	html, body {
+		background: #fff !important;
+		color: #000 !important;
+		/* Printers ignore backgrounds by default; the document is monochrome
+		   by design, so nothing is lost and everything stays legible. */
+	}
+
+	body { overflow: visible !important; }
+
+	/* The document fills the page — the on-screen card framing is chrome. */
+	.print-doc {
+		max-width: none !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		box-shadow: none !important;
+		border-radius: 0 !important;
+	}
+
+	/* A role split across a page boundary is the classic resume printing bug:
+	   the heading sits alone at the foot of page one and its bullets start
+	   page two. */
+	.print-item { break-inside: avoid; page-break-inside: avoid; }
+	.print-section { break-inside: auto; }
+	.print-section h2 { break-after: avoid; page-break-after: avoid; }
+	.print-section h3 { break-after: avoid; page-break-after: avoid; }
+
+	/* Never orphan or widow a single line of a bullet. */
+	p, li { orphans: 3; widows: 3; }
+
+	a { text-decoration: none !important; color: inherit !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*, *::before, *::after {
 		animation-duration: 0.01ms !important;

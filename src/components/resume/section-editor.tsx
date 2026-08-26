@@ -1,7 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Pencil,
+  Plus,
+  Trash2,
+} from "lucide-react";
 
 import {
   deleteItemAction,
@@ -41,22 +48,54 @@ export function SectionEditor({
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [renaming, setRenaming] = React.useState(false);
 
+  /**
+   * Collapsed sections stay collapsed until you open them.
+   *
+   * A resume with five sections and twenty entries is several screens of
+   * editor, and finding the one role you meant to fix means scrolling past
+   * everything else. Sections start open when they are empty — an empty
+   * collapsed section is a section nobody fills in.
+   */
+  const [open, setOpen] = React.useState(section.items.length === 0);
+
   const meta = KIND_META[section.kind];
 
   return (
     <section className="rounded-card border border-line bg-surface shadow-e1">
-      <header className="flex flex-wrap items-center gap-2 border-b border-line-subtle px-4 py-3">
+      <header
+        className={cn(
+          "flex flex-wrap items-center gap-2 px-4 py-3",
+          open && "border-b border-line-subtle",
+        )}
+      >
         {renaming ? (
           <RenameForm section={section} onDone={() => setRenaming(false)} />
         ) : (
           <>
-            <h3 className="text-sm font-semibold text-fg">{section.title}</h3>
-            <Badge>{meta.label}</Badge>
-            <span className="t-num text-xs text-fg-faint">
-              {section.items.length}
-            </span>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-label={`${open ? "Collapse" : "Expand"} ${section.title}`}
+              className="fx-press -ml-1 flex min-w-0 flex-1 items-center gap-2 rounded-control py-0.5 text-left"
+            >
+              <ChevronRight
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 text-fg-faint transition-transform duration-200 ease-out",
+                  open && "rotate-90",
+                )}
+                strokeWidth={2.25}
+              />
+              <h3 className="truncate text-sm font-semibold text-fg">
+                {section.title}
+              </h3>
+              <Badge>{meta.label}</Badge>
+              <span className="t-num text-xs text-fg-faint">
+                {section.items.length}
+              </span>
+            </button>
 
-            <div className="ml-auto flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5">
               <IconButton
                 label="Rename section"
                 onClick={() => setRenaming(true)}
@@ -92,6 +131,7 @@ export function SectionEditor({
         )}
       </header>
 
+      {!open ? null : (
       <div className="space-y-2 p-4">
         {section.items.length === 0 && !adding ? (
           <p className="py-2 text-sm text-fg-subtle">{meta.hint}</p>
@@ -200,6 +240,7 @@ export function SectionEditor({
           </button>
         )}
       </div>
+      )}
     </section>
   );
 }

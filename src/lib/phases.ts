@@ -65,7 +65,7 @@ export const PHASES: Phase[] = [
       "ATS-safe template — one column, real text, standard headings",
       "Three layouts, and a header you arrange yourself",
       "Named versions you can preview and restore",
-      "PDF export",
+      "PDF export from the same DOM as the preview",
     ],
   },
   {

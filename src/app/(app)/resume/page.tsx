@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Eye, FileText } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 
 import {
   getOrCreateResume,
@@ -45,6 +45,10 @@ export default async function ResumePage({
   ]);
 
   const viewing = params.version ? await readVersion(params.version) : null;
+
+  // See the note beside <BasicsForm> below.
+  const basicsKey = JSON.stringify(data.basics);
+  const layoutKey = JSON.stringify(data.layout);
   const shown = viewing?.data ?? data;
   const itemCount = data.sections.reduce((n, s) => n + s.items.length, 0);
 
@@ -62,12 +66,40 @@ export default async function ResumePage({
             </span>
           </>
         }
+        actions={
+          <a
+            href={
+              viewing
+                ? `/print/resume?version=${params.version}&auto=1`
+                : "/print/resume?auto=1"
+            }
+            target="_blank"
+            rel="noopener"
+            className="fx-press inline-flex h-10 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-fg-on-accent shadow-e1 transition-colors duration-200 ease-out hover:bg-accent-hover active:bg-accent-press"
+          >
+            <Download className="h-4 w-4" strokeWidth={2.25} />
+            Download PDF
+          </a>
+        }
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* ── Editor ─────────────────────────────────────────────────────── */}
         <div className="space-y-4">
-          <BasicsForm basics={data.basics} />
+          {/*
+            Keyed on the slice each panel renders.
+
+            These forms seed their fields from props with useState and
+            defaultValue, and neither re-runs when the server sends new data —
+            so restoring a version, or saving from a second tab, left the
+            editor showing values that no longer matched what was stored. That
+            is worse than a stale read: it looks authoritative.
+
+            Keyed on their own slice rather than on `updatedAt`, so adding a
+            section does not remount the header form and discard whatever you
+            were part-way through typing in it.
+          */}
+          <BasicsForm key={basicsKey} basics={data.basics} />
 
           {data.sections.map((section, i) => (
             <SectionEditor
@@ -80,7 +112,7 @@ export default async function ResumePage({
 
           <AddSection />
 
-          <LayoutPanel layout={data.layout} />
+          <LayoutPanel key={layoutKey} layout={data.layout} />
 
           <VersionsPanel versions={versions} viewingId={viewing ? params.version : undefined} />
 
@@ -100,20 +132,22 @@ export default async function ResumePage({
             <span className="t-slate">
               {viewing ? "Viewing a snapshot" : "Preview"}
             </span>
-            {viewing ? (
-              <Link
-                href="/resume"
-                scroll={false}
-                className="flex items-center gap-1.5 text-xs font-semibold text-fg-accent hover:underline"
-              >
-                <Eye className="h-3.5 w-3.5" strokeWidth={2} />
-                Back to the master
-              </Link>
-            ) : (
-              <span className="text-xs text-fg-faint">
-                One column, real text — what an ATS reads
-              </span>
-            )}
+            <span className="flex items-center gap-3">
+              {viewing ? (
+                <Link
+                  href="/resume"
+                  scroll={false}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-fg-accent hover:underline"
+                >
+                  <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                  Back to the master
+                </Link>
+              ) : (
+                <span className="hidden text-xs text-fg-faint sm:inline">
+                  One column, real text — what an ATS reads
+                </span>
+              )}
+            </span>
           </div>
 
           {viewing ? (

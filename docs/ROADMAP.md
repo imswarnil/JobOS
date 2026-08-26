@@ -61,7 +61,10 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Demo account ships with a populated resume
 - [x] Three layouts and an arrangeable header
 - [x] Named versions — save, preview, restore
-- [ ] PDF export via React-PDF, rendering the same tree as the preview
+- [x] PDF export — the browser prints the same DOM as the preview, so the
+      two cannot drift; page-break rules keep a role with its bullets
+- [x] Download any saved version as a PDF without restoring it first
+- [x] Collapsible sections, and editor panels that resync with the server
 - [ ] Generate bullets from journal entries
 
 ## Phase 3 — JD-tailored resume

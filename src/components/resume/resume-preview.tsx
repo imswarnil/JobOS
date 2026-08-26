@@ -83,7 +83,10 @@ export function ResumePreview({ data }: { data: ResumeData }) {
   return (
     <article
       className={cn(
-        "mx-auto w-full max-w-[52rem] bg-white text-[#111] shadow-e2",
+        // print-doc strips the on-screen framing when printing; the document
+        // itself is unchanged, which is what keeps the PDF and the preview
+        // from ever drifting apart.
+        "print-doc mx-auto w-full max-w-[52rem] bg-white text-[#111] shadow-e2",
         layout.style === "compact"
           ? "px-9 py-9 sm:px-12 sm:py-10"
           : "px-10 py-12 sm:px-14 sm:py-14",
@@ -143,7 +146,7 @@ export function ResumePreview({ data }: { data: ResumeData }) {
 
 function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
   return (
-    <section className={skin.sectionGap}>
+    <section className={cn("print-section", skin.sectionGap)}>
       <h2 className="border-b border-[#ccc] pb-1 text-[0.8125rem] font-bold tracking-[0.12em] text-[#000] uppercase">
         {section.title}
       </h2>
@@ -151,7 +154,10 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
       {section.kind === "skills" ? (
         <dl className="mt-3 space-y-1.5">
           {section.items.map((item) => (
-            <div key={item.id} className={cn("flex flex-wrap gap-x-2", skin.body)}>
+            <div
+              key={item.id}
+              className={cn("print-item flex flex-wrap gap-x-2", skin.body)}
+            >
               <dt className="font-bold">{item.title}:</dt>
               <dd className="text-[#222]">
                 {item.tags.length ? item.tags.join(", ") : item.subtitle}
@@ -164,7 +170,10 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
           {section.items.map((item) => {
             const range = formatRange(item);
             return (
-              <div key={item.id}>
+              // print-item keeps a role and its bullets on one page — a
+              // heading stranded at the foot of page one is the classic
+              // resume printing bug.
+              <div key={item.id} className="print-item">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4">
                   <h3 className="text-[1rem] font-bold">
                     {item.title}

@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Check, Eye, History, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
+import {
+  Check,
+  Download,
+  Eye,
+  History,
+  Loader2,
+  RotateCcw,
+  Save,
+  Trash2,
+} from "lucide-react";
 
 import {
   deleteVersionAction,
@@ -137,6 +146,17 @@ export function VersionsPanel({
                 >
                   <Eye className="h-3.5 w-3.5" strokeWidth={1.75} />
                 </Link>
+
+                <a
+                  href={`/print/resume?version=${v.id}&auto=1`}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={`Download ${v.label} as PDF`}
+                  title="Open to print or save as PDF"
+                  className="grid h-7 w-7 place-items-center rounded-control text-fg-faint transition-colors duration-200 ease-out hover:bg-sunken hover:text-fg"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.75} />
+                </a>
 
                 <RestoreButton id={v.id} label={v.label} />
 
