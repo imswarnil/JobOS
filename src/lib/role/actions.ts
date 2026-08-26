@@ -5,7 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { company, workLog } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
-import { complete, extractJson } from "@/lib/llm/providers";
+import { ProviderError, completeJson } from "@/lib/llm/providers";
 import {
   RateLimited,
   describeReset,
@@ -120,42 +120,35 @@ export async function defineRoleAction(): Promise<RoleState> {
   }
 
   try {
-    const result = await complete({
-      system: SYSTEM_PROMPT,
-      user: buildPrompt(rows),
-      maxTokens: 1400,
-      temperature: 0.6,
-    });
-
-    const parsed = roleVerdictSchema.safeParse(
-      extractJson<unknown>(result.text),
+    const { value, provider } = await completeJson(
+      {
+        system: SYSTEM_PROMPT,
+        user: buildPrompt(rows),
+        maxTokens: 4000,
+        temperature: 0.6,
+      },
+      // A provider whose answer fails this has failed — the chain falls
+      // through to the next one rather than surfacing a broken verdict.
+      (raw) => roleVerdictSchema.parse(raw),
     );
 
-    if (!parsed.success) {
-      await settleQuota(usageId, {
-        provider: result.provider,
-        ok: false,
-        error: `Bad shape: ${parsed.error.issues[0]?.message}`,
-      });
-      return {
-        error:
-          "The model answered in a shape we could not read. Try again — that usually fixes it.",
-      };
-    }
-
-    await settleQuota(usageId, { provider: result.provider, ok: true });
+    await settleQuota(usageId, { provider, ok: true });
     const quota = await getQuota();
 
-    return { verdict: parsed.data, remaining: quota.remaining };
+    return { verdict: value, remaining: quota.remaining };
   } catch (error) {
+    const detail =
+      error instanceof ProviderError ? error.message : (error as Error).message;
+
     await settleQuota(usageId, {
-      provider: "unknown",
+      provider: error instanceof ProviderError ? error.provider : "unknown",
       ok: false,
-      error: (error as Error).message,
+      error: detail,
     });
+
     return {
       error:
-        "Both model providers failed to answer. That is usually temporary — try again in a minute.",
+        "The model could not produce a usable answer. That is usually temporary — try again in a minute.",
     };
   }
 }

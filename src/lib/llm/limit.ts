@@ -90,20 +90,31 @@ export async function spendQuota(feature: string): Promise<string> {
   return row.id;
 }
 
-/** Records how the call actually went, once it has. */
+/**
+ * Records how the call actually went, once it has.
+ *
+ * Best-effort by design. This is bookkeeping, and the quota was already spent
+ * when the row was inserted — so a failure here (a dropped connection, a
+ * blip) must not turn a successful model call into a 500 for the user. It is
+ * swallowed and logged instead.
+ */
 export async function settleQuota(
   id: string,
   result: { provider: string; ok: boolean; error?: string },
 ): Promise<void> {
-  const db = getDb();
-  await db
-    .update(llmUsage)
-    .set({
-      provider: result.provider,
-      ok: result.ok,
-      error: result.error?.slice(0, 500) ?? null,
-    })
-    .where(eq(llmUsage.id, id));
+  try {
+    const db = getDb();
+    await db
+      .update(llmUsage)
+      .set({
+        provider: result.provider,
+        ok: result.ok,
+        error: result.error?.slice(0, 500) ?? null,
+      })
+      .where(eq(llmUsage.id, id));
+  } catch (error) {
+    console.error("[llm] could not record usage", id, error);
+  }
 }
 
 /** Human phrasing for "you are out", used in the UI. */

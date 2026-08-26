@@ -86,7 +86,21 @@ async function postJson(
 
 /* ── Gemini ──────────────────────────────────────────────────────────────── */
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+/**
+ * Model names are pinned but overridable, because providers retire them.
+ *
+ * Both defaults here replaced names that had already been withdrawn —
+ * `gemini-2.0-flash` and `llama-3.3-70b-versatile` both 404'd — so treat this
+ * as a when, not an if. The env override means the fix is a config change
+ * rather than a deploy.
+ *
+ * To see what is currently available:
+ *   curl -H "x-goog-api-key: $GEMINI_API_KEY" \
+ *     https://generativelanguage.googleapis.com/v1beta/models
+ *   curl -H "Authorization: Bearer $GROQ_API_KEY" \
+ *     https://api.groq.com/openai/v1/models
+ */
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 async function gemini(req: CompletionRequest): Promise<CompletionResult> {
   const key = process.env.GEMINI_API_KEY;
@@ -101,25 +115,47 @@ async function gemini(req: CompletionRequest): Promise<CompletionResult> {
       contents: [{ role: "user", parts: [{ text: req.user }] }],
       generationConfig: {
         temperature: req.temperature ?? 0.4,
-        maxOutputTokens: req.maxTokens ?? 900,
+        maxOutputTokens: req.maxTokens ?? 4000,
         responseMimeType: "application/json",
+        /**
+         * Gemini 3.x charges *thinking* tokens against maxOutputTokens, which
+         * is a trap: with a 1400 budget a real prompt spent 1342 tokens
+         * thinking and 54 answering, and the JSON came back truncated. Capping
+         * the thinking leaves the budget for the answer.
+         */
+        thinkingConfig: { thinkingBudget: 512 },
       },
     },
     { "x-goog-api-key": key },
     "gemini",
   )) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: {
+      finishReason?: string;
+      content?: { parts?: { text?: string }[] };
+    }[];
   };
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new ProviderError("gemini", "Empty response");
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
+
+  // Say what actually happened. A truncated reply is not an empty one, and
+  // the difference is the whole diagnosis.
+  if (candidate?.finishReason === "MAX_TOKENS") {
+    throw new ProviderError("gemini", "Ran out of output tokens mid-answer");
+  }
+  if (!text) {
+    throw new ProviderError(
+      "gemini",
+      `Empty response (finish: ${candidate?.finishReason ?? "unknown"})`,
+    );
+  }
 
   return { text, provider: "gemini" };
 }
 
 /* ── Groq ────────────────────────────────────────────────────────────────── */
 
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 
 async function groq(req: CompletionRequest): Promise<CompletionResult> {
   const key = process.env.GROQ_API_KEY;
@@ -134,14 +170,21 @@ async function groq(req: CompletionRequest): Promise<CompletionResult> {
         { role: "user", content: req.user },
       ],
       temperature: req.temperature ?? 0.4,
-      max_tokens: req.maxTokens ?? 900,
+      max_tokens: req.maxTokens ?? 4000,
       response_format: { type: "json_object" },
     },
     { authorization: `Bearer ${key}` },
     "groq",
-  )) as { choices?: { message?: { content?: string } }[] };
+  )) as {
+    choices?: { finish_reason?: string; message?: { content?: string } }[];
+  };
 
-  const text = data.choices?.[0]?.message?.content;
+  const choice = data.choices?.[0];
+  const text = choice?.message?.content;
+
+  if (choice?.finish_reason === "length") {
+    throw new ProviderError("groq", "Ran out of output tokens mid-answer");
+  }
   if (!text) throw new ProviderError("groq", "Empty response");
 
   return { text, provider: "groq" };
@@ -220,4 +263,53 @@ export function extractJson<T>(text: string): T {
     }
     throw new Error("The model did not return usable JSON.");
   }
+}
+
+
+/**
+ * The same fallback chain, but with parsing and validation folded in.
+ *
+ * This exists because of a real failure: Gemini returned a *truncated* JSON
+ * object, `complete()` treated that as success, and the caller reported "both
+ * providers failed" — which was both wrong and unhelpful, since Groq had
+ * never been asked.
+ *
+ * A provider that answers with something unusable has failed, in exactly the
+ * way a 500 is a failure. Judging that inside the chain is what lets the
+ * fallback do its job, and what lets the error name the real cause.
+ */
+export async function completeJson<T>(
+  req: CompletionRequest,
+  validate: (value: unknown) => T,
+): Promise<{ value: T; provider: string }> {
+  const chain: [string, (r: CompletionRequest) => Promise<CompletionResult>][] =
+    [
+      ["gemini", gemini],
+      ["groq", groq],
+    ];
+
+  const available = chain.filter(([name]) =>
+    configuredProviders().includes(name),
+  );
+
+  if (!available.length) {
+    throw new ProviderError(
+      "none",
+      "No model provider is configured. Set GEMINI_API_KEY or GROQ_API_KEY.",
+    );
+  }
+
+  const failures: string[] = [];
+
+  for (const [name, call] of available) {
+    try {
+      const result = await call(req);
+      const value = validate(extractJson<unknown>(result.text));
+      return { value, provider: result.provider };
+    } catch (error) {
+      failures.push(`${name}: ${(error as Error).message}`);
+    }
+  }
+
+  throw new ProviderError("all", failures.join(" · "));
 }
