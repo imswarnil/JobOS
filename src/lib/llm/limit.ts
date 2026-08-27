@@ -24,8 +24,42 @@ import { requireUser } from "@/lib/auth";
  * the audit trail.
  */
 
-export const LIMIT = 5;
+/**
+ * Five per person per rolling 24 hours by default, overridable — and `0`
+ * means unmetered.
+ *
+ * The limit exists because the hosted providers run on shared keys someone
+ * pays for. Point `LLM_PROVIDER_ORDER` at a self-hosted Ollama and that
+ * reasoning evaporates: inference on your own hardware has no per-request
+ * cost and no quota to exhaust, so capping it is just an obstacle. Set
+ * `LLM_RATE_LIMIT=0` there.
+ */
+const DEFAULT_LIMIT = 5;
+
+/**
+ * Parsed defensively, because every wrong answer here fails open.
+ *
+ * `??` would not catch `LLM_RATE_LIMIT=""` — the shape .env.example uses for
+ * every unset key — and `Number("")` is `0`, which this file reads as
+ * unmetered. A typo would do the same via `NaN`. Either way the cap that
+ * protects the shared hosted keys vanishes silently, so anything that is not
+ * a deliberate non-negative number falls back to the default.
+ */
+function configuredLimit(): number {
+  const raw = process.env.LLM_RATE_LIMIT?.trim();
+  if (!raw) return DEFAULT_LIMIT;
+
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_LIMIT;
+}
+
+export const LIMIT = configuredLimit();
 export const WINDOW_HOURS = 24;
+
+/** True when this deployment does not meter model use at all. */
+export function isUnmetered(): boolean {
+  return !Number.isFinite(LIMIT) || LIMIT <= 0;
+}
 
 export interface Quota {
   used: number;
@@ -38,6 +72,16 @@ export interface Quota {
 /** What the current user has left. Requires a session — callers are gated. */
 export async function getQuota(): Promise<Quota> {
   const user = await requireUser();
+
+  if (isUnmetered()) {
+    return {
+      used: 0,
+      remaining: Number.POSITIVE_INFINITY,
+      limit: Number.POSITIVE_INFINITY,
+      resetsAt: null,
+    };
+  }
+
   const db = getDb();
 
   const since = sql`now() - interval '${sql.raw(String(WINDOW_HOURS))} hours'`;
@@ -78,8 +122,13 @@ export class RateLimited extends Error {
  */
 export async function spendQuota(feature: string): Promise<string> {
   const user = await requireUser();
-  const quota = await getQuota();
-  if (quota.remaining <= 0) throw new RateLimited(quota);
+
+  // Still recorded when unmetered — the ledger is the audit trail as much as
+  // the limit, and "which provider answered, and did it work" stays useful.
+  if (!isUnmetered()) {
+    const quota = await getQuota();
+    if (quota.remaining <= 0) throw new RateLimited(quota);
+  }
 
   const db = getDb();
   const [row] = await db

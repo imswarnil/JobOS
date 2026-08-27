@@ -38,7 +38,8 @@ export function RoleReveal({
   );
 
   const remaining = state.remaining ?? quota.remaining;
-  const out = remaining <= 0;
+  const metered = Number.isFinite(quota.limit);
+  const out = metered && remaining <= 0;
 
   if (state.verdict) {
     return <Verdict verdict={state.verdict} remaining={remaining} />;
@@ -93,7 +94,9 @@ export function RoleReveal({
           </button>
 
           <p className="text-xs text-fg-subtle">
-            {out ? (
+            {!metered ? (
+              "Self-hosted model — no request limit"
+            ) : out ? (
               "You have used all your requests for now."
             ) : (
               <>
@@ -278,7 +281,9 @@ function Verdict({
       ) : null}
 
       <p className="text-center text-xs text-fg-subtle">
-        {remaining} model {remaining === 1 ? "request" : "requests"} left today.
+        {Number.isFinite(remaining)
+          ? `${remaining} model ${remaining === 1 ? "request" : "requests"} left today. `
+          : ""}
         Reload to run it again.
       </p>
     </div>

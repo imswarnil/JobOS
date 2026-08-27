@@ -40,7 +40,11 @@ export default async function RolePage() {
             <Badge tone="special">AI</Badge>
             <span className="t-slate">
               {providers.length
-                ? `${providers.join(" → ")} · ${quota.remaining}/${quota.limit} left`
+                ? `${providers.join(" → ")}${
+                  Number.isFinite(quota.limit)
+                    ? ` · ${quota.remaining}/${quota.limit} left`
+                    : " · unmetered"
+                }`
                 : "no provider configured"}
             </span>
           </>

@@ -4,14 +4,21 @@ import "server-only";
  * MODEL PROVIDERS
  * ===============
  *
- * Two of them behind one shape, called over plain `fetch` rather than through
- * either vendor's SDK. Both endpoints are a single POST returning JSON; an SDK
- * would add megabytes of dependency and a second abstraction to debug through,
- * and neither is worth it for one call.
+ * Three of them behind one shape, called over plain `fetch` rather than
+ * through any vendor's SDK. Every endpoint is a single POST returning JSON; an
+ * SDK would add megabytes of dependency and a second abstraction to debug
+ * through, and none is worth it for one call.
  *
- *   gemini  primary — generous free tier, good at structured extraction
- *   groq    fallback — different infrastructure, so a Gemini rate limit or
+ *   gemini  hosted — generous free tier, good at structured extraction
+ *   groq    hosted — different infrastructure, so a Gemini rate limit or
  *           outage does not take the feature down with it
+ *   ollama  self-hosted — no quota and no per-request cost, in exchange for
+ *           being only as good as the hardware you point it at
+ *
+ * The order comes from `LLM_PROVIDER_ORDER` rather than a constant, because
+ * the right one depends on the deployment: hosted first while you are living
+ * on free tiers, self-hosted first once you own the box. Each is tried in
+ * turn until one answers.
  *
  * Every call asks for JSON and validates the result at the call site. Models
  * wrap JSON in prose and fences no matter how firmly you ask them not to, so
@@ -157,6 +164,64 @@ async function gemini(req: CompletionRequest): Promise<CompletionResult> {
 
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 
+/* ── Ollama ──────────────────────────────────────────────────────────────── */
+
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2:3b";
+
+/**
+ * A self-hosted model, over Ollama's OpenAI-shaped chat endpoint.
+ *
+ * The reason to want this is not quality — a 3B model will lose to Gemini on
+ * structured extraction every time — it is that inference you host yourself
+ * has no per-request cost and no quota, which changes what the rate limit is
+ * even for. Put it first in LLM_PROVIDER_ORDER on a box that can run
+ * something large, and the hosted providers become the fallback rather than
+ * the default.
+ *
+ * `OLLAMA_BASE_URL` must be reachable *from wherever JobOS runs*. On Vercel
+ * that means publicly reachable and authenticated — a localhost URL will
+ * work in development and silently fail in production.
+ */
+async function ollama(req: CompletionRequest): Promise<CompletionResult> {
+  const base = process.env.OLLAMA_BASE_URL;
+  if (!base) throw new ProviderError("ollama", "OLLAMA_BASE_URL is not set");
+
+  const headers: Record<string, string> = {};
+  // Optional bearer, for an instance behind a reverse proxy.
+  if (process.env.OLLAMA_API_KEY) {
+    headers.authorization = `Bearer ${process.env.OLLAMA_API_KEY}`;
+  }
+
+  const data = (await postJson(
+    `${base.replace(/\/$/, "")}/api/chat`,
+    {
+      model: OLLAMA_MODEL,
+      messages: [
+        { role: "system", content: req.system },
+        { role: "user", content: req.user },
+      ],
+      stream: false,
+      // Ollama's own JSON mode. Weaker than the hosted providers' schema
+      // enforcement, which is why extractJson is forgiving.
+      format: "json",
+      options: {
+        temperature: req.temperature ?? 0.4,
+        num_predict: req.maxTokens ?? 4000,
+      },
+    },
+    headers,
+    "ollama",
+  )) as { message?: { content?: string }; done_reason?: string };
+
+  const text = data.message?.content;
+  if (data.done_reason === "length") {
+    throw new ProviderError("ollama", "Ran out of output tokens mid-answer");
+  }
+  if (!text) throw new ProviderError("ollama", "Empty response");
+
+  return { text, provider: "ollama" };
+}
+
 async function groq(req: CompletionRequest): Promise<CompletionResult> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new ProviderError("groq", "GROQ_API_KEY is not set");
@@ -192,11 +257,34 @@ async function groq(req: CompletionRequest): Promise<CompletionResult> {
 
 /* ── The seam ────────────────────────────────────────────────────────────── */
 
+const IMPLEMENTATIONS: Record<
+  string,
+  { call: (r: CompletionRequest) => Promise<CompletionResult>; ready: () => boolean }
+> = {
+  gemini: { call: gemini, ready: () => Boolean(process.env.GEMINI_API_KEY) },
+  groq: { call: groq, ready: () => Boolean(process.env.GROQ_API_KEY) },
+  ollama: { call: ollama, ready: () => Boolean(process.env.OLLAMA_BASE_URL) },
+};
+
+/**
+ * The order to try providers in, from `LLM_PROVIDER_ORDER`.
+ *
+ * Configurable because the right order depends on the deployment: hosted
+ * first when you are relying on free tiers, self-hosted first when you own
+ * the hardware and the quota stops mattering.
+ */
+export function providerOrder(): string[] {
+  const configured = process.env.LLM_PROVIDER_ORDER;
+  const order = configured
+    ? configured.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["gemini", "groq", "ollama"];
+
+  return order.filter((name) => name in IMPLEMENTATIONS);
+}
+
+/** Those in the configured order that actually have credentials. */
 export function configuredProviders(): string[] {
-  return [
-    process.env.GEMINI_API_KEY ? "gemini" : null,
-    process.env.GROQ_API_KEY ? "groq" : null,
-  ].filter(Boolean) as string[];
+  return providerOrder().filter((name) => IMPLEMENTATIONS[name].ready());
 }
 
 /**
@@ -210,27 +298,19 @@ export function configuredProviders(): string[] {
 export async function complete(
   req: CompletionRequest,
 ): Promise<CompletionResult> {
-  const chain: [string, (r: CompletionRequest) => Promise<CompletionResult>][] =
-    [
-      ["gemini", gemini],
-      ["groq", groq],
-    ];
-
-  const available = chain.filter(([name]) =>
-    configuredProviders().includes(name),
-  );
+  const available = configuredProviders();
 
   if (!available.length) {
     throw new ProviderError(
       "none",
-      "No model provider is configured. Set GEMINI_API_KEY or GROQ_API_KEY.",
+      "No model provider is configured. Set GEMINI_API_KEY, GROQ_API_KEY or OLLAMA_BASE_URL.",
     );
   }
 
   const failures: string[] = [];
-  for (const [name, call] of available) {
+  for (const name of available) {
     try {
-      return await call(req);
+      return await IMPLEMENTATIONS[name].call(req);
     } catch (error) {
       failures.push(`${name}: ${(error as Error).message}`);
     }
@@ -282,28 +362,20 @@ export async function completeJson<T>(
   req: CompletionRequest,
   validate: (value: unknown) => T,
 ): Promise<{ value: T; provider: string }> {
-  const chain: [string, (r: CompletionRequest) => Promise<CompletionResult>][] =
-    [
-      ["gemini", gemini],
-      ["groq", groq],
-    ];
-
-  const available = chain.filter(([name]) =>
-    configuredProviders().includes(name),
-  );
+  const available = configuredProviders();
 
   if (!available.length) {
     throw new ProviderError(
       "none",
-      "No model provider is configured. Set GEMINI_API_KEY or GROQ_API_KEY.",
+      "No model provider is configured. Set GEMINI_API_KEY, GROQ_API_KEY or OLLAMA_BASE_URL.",
     );
   }
 
   const failures: string[] = [];
 
-  for (const [name, call] of available) {
+  for (const name of available) {
     try {
-      const result = await call(req);
+      const result = await IMPLEMENTATIONS[name].call(req);
       const value = validate(extractJson<unknown>(result.text));
       return { value, provider: result.provider };
     } catch (error) {
