@@ -77,11 +77,17 @@ The shell, the design language, and the seams every later phase plugs into.
       validation inside the fallback chain
 - [x] Per-user rate limiting (5 per rolling 24h) backed by an ledger table
 - [x] "Define my role" — names your job title from your own entries
-- [ ] Job description parsing into structured fields
-- [ ] Fact-grounded rewrite — journal entries as the only permitted source
-- [ ] Diff against the master resume
-- [ ] Gap report: what the posting wants that the record cannot support
-- [ ] Per-application resume versions
+- [x] Job description parsing into structured fields
+- [x] Paste the text, or fetch one posting from a URL
+- [x] Fact-grounded rewrite — resume and journal as the only permitted sources
+- [x] Grounding check: numbers in the output that no source supports are
+      flagged for review rather than silently accepted
+- [x] Gap report: what the posting wants that the record cannot support
+- [x] Match score
+- [x] Save a tailored copy as a resume version
+- [x] Ollama as a third provider, with the rate limit disableable when
+      inference is self-hosted
+- [ ] Diff against the master resume, side by side
 
 ## Phase 4 — Job discovery & tracker
 

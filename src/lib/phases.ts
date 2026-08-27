@@ -73,12 +73,14 @@ export const PHASES: Phase[] = [
     title: "JD-tailored resume",
     summary:
       "Paste a job description; the model rewrites your resume to match it — using only real facts drawn from your journal.",
-    status: "planned",
+    status: "building",
     deliverables: [
-      "Job-description parsing",
-      "Fact-grounded rewrite from journal entries",
-      "Diff against the master resume",
-      "Per-application resume versions",
+      "Job-description parsing, from pasted text or a link",
+      "Fact-grounded rewrite from your resume and journal only",
+      "A grounding check that flags numbers no source supports",
+      "An honest gap report and a match score",
+      "Saved as a version, never over the master",
+      "Gemini, Groq or a self-hosted Ollama",
     ],
   },
   {

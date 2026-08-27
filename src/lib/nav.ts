@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   NotebookPen,
   FileText,
+  Wand2,
   Briefcase,
   Building2,
   Send,
@@ -83,6 +84,13 @@ export const NAV: NavGroup[] = [
         icon: FileText,
         description:
           "One master resume, built from what you have actually done.",
+      },
+      {
+        label: "Tailor to a job",
+        href: "/tailor",
+        icon: Wand2,
+        description:
+          "Rewrite your resume for one posting, using only real facts.",
       },
     ],
   },
