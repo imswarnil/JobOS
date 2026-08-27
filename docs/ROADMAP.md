@@ -91,7 +91,10 @@ The shell, the design language, and the seams every later phase plugs into.
 
 ## Phase 4 — Job discovery & tracker
 
-- [ ] Greenhouse and Lever connectors, plus a company watchlist
+- [x] Greenhouse and Lever connectors — public per-company JSON feeds,
+      no credentials, one board failing never costs the others
+- [x] `discover()` fans out and de-duplicates, within and across sources
+- [ ] A company watchlist to feed them board tokens (needs a migration)
 - [ ] Adzuna connector
 - [ ] Saved search criteria
 - [ ] De-duplication and match scoring

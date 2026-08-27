@@ -20,6 +20,15 @@ export interface JobSearchQuery {
   /** Ignore anything older than this. */
   postedAfter?: Date;
   limit?: number;
+  /**
+   * Company board tokens, for the per-company sources.
+   *
+   * Greenhouse and Lever have no global search — a board token *is* the
+   * query, and without one there is nothing to ask. An aggregator like
+   * Adzuna ignores this and reads `keywords` instead, which is why the two
+   * kinds of source share one interface but not one input.
+   */
+  boards?: string[];
 }
 
 /** A posting as it arrives, before it is scored or saved. */
@@ -65,10 +74,69 @@ export function configuredSources(): JobSource[] {
 }
 
 /**
- * TODO(Phase 4): fan out across configured sources, de-duplicate on
- * (source, externalId) and then again on (title, company) across sources,
- * and score each survivor against the owner's journal.
+ * Every configured source, run at once and merged.
+ *
+ * Settled rather than awaited together: a board that 404s or times out must
+ * cost its own results and nothing else. A run that returns nine sources'
+ * worth of postings is worth far more than one that returns an error because
+ * the tenth was unreachable.
+ *
+ * TODO(Phase 4): score each survivor against the owner's journal.
  */
-export async function discover(): Promise<DiscoveredJob[]> {
-  throw new Error("Not implemented until Phase 4.");
+export async function discover(
+  query: JobSearchQuery,
+): Promise<DiscoveredJob[]> {
+  const sources = configuredSources();
+  if (!sources.length) return [];
+
+  const runs = await Promise.allSettled(
+    sources.map((source) => source.search(query)),
+  );
+
+  return dedupe(
+    runs.flatMap((r) => (r.status === "fulfilled" ? r.value : [])),
+  );
+}
+
+/**
+ * Two passes, because there are two ways to see the same job twice.
+ *
+ * Within a source, `(source, externalId)` is exact — the same posting
+ * fetched twice, which the unique index on `job` also enforces. Across
+ * sources it is a judgement call: the same role listed on a company's
+ * Greenhouse board and syndicated to an aggregator has different ids and
+ * different URLs, so the only handle is the title and the company. That
+ * comparison is normalised and deliberately blunt; a false merge loses one
+ * duplicate listing, while no merge at all means reviewing the same job
+ * repeatedly, and the first costs less.
+ *
+ * Earlier wins, so a posting from the company's own board — which carries
+ * the better description — survives over its syndicated copy.
+ */
+function dedupe(jobs: DiscoveredJob[]): DiscoveredJob[] {
+  const byExternal = new Set<string>();
+  const byIdentity = new Set<string>();
+  const kept: DiscoveredJob[] = [];
+
+  for (const job of jobs) {
+    const external = `${job.source}\u0000${job.externalId}`;
+    if (byExternal.has(external)) continue;
+
+    const identity = `${normalise(job.title)}\u0000${normalise(job.company ?? "")}`;
+    if (byIdentity.has(identity)) continue;
+
+    byExternal.add(external);
+    byIdentity.add(identity);
+    kept.push(job);
+  }
+
+  return kept;
+}
+
+/** Case, punctuation and spacing all vary between feeds; none of it matters. */
+function normalise(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
