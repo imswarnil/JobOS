@@ -10,6 +10,7 @@ import {
   monthLabel,
   shiftMonth,
 } from "@/lib/journal/calendar";
+import { NavLink } from "@/components/journal/calendar-nav";
 import { cn } from "@/lib/utils";
 
 /**
@@ -238,38 +239,5 @@ export function CalendarView({
         )}
       </div>
     </div>
-  );
-}
-
-function NavLink({
-  href,
-  label,
-  disabled,
-  children,
-}: {
-  href: string;
-  label: string;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  if (disabled) {
-    return (
-      <span
-        aria-hidden
-        className="grid h-8 w-8 place-items-center rounded-control text-fg-faint opacity-30"
-      >
-        {children}
-      </span>
-    );
-  }
-  return (
-    <Link
-      href={href}
-      scroll={false}
-      aria-label={label}
-      className="fx-press grid h-8 w-8 place-items-center rounded-control text-fg-muted transition-colors duration-200 ease-out hover:bg-sunken hover:text-fg"
-    >
-      {children}
-    </Link>
   );
 }

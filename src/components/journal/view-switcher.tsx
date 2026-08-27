@@ -9,8 +9,8 @@ import type { JournalView } from "@/lib/journal/views";
 
 const OPTIONS = [
   { id: "list" as const, label: "List", icon: Rows3, hint: "Newest first" },
-  { id: "calendar" as const, label: "Calendar", icon: CalendarDays, hint: "By day, month at a time" },
-  { id: "board" as const, label: "Board", icon: Columns3, hint: "Grouped by kind" },
+  { id: "calendar" as const, label: "Calendar", icon: CalendarDays, hint: "By day — week, month or year" },
+  { id: "board" as const, label: "Board", icon: Columns3, hint: "A column per group" },
 ];
 
 /**
@@ -25,8 +25,11 @@ export function ViewSwitcher({ view }: { view: JournalView }) {
     const p = new URLSearchParams(params);
     if (next === "list") p.delete("view");
     else p.set("view", next);
-    // A month only means something in the calendar.
-    if (next !== "calendar") p.delete("month");
+    // Span and its anchors only mean something in the calendar. Left behind,
+    // they would silently decide what you see on the next visit to it.
+    if (next !== "calendar") {
+      for (const key of ["span", "week", "month", "year", "day"]) p.delete(key);
+    }
     const qs = p.toString();
     return qs ? `${pathname}?${qs}` : pathname;
   }

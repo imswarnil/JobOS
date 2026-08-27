@@ -11,16 +11,30 @@ import {
 } from "@/lib/journal/queries";
 import { currentOrgId, listOrgs, listProjects } from "@/lib/career/queries";
 import { LOG_TYPES, logTypeMeta } from "@/lib/journal/types";
-import { monthBounds, parseMonth } from "@/lib/journal/calendar";
+import {
+  monthBounds,
+  parseMonth,
+  parseWeek,
+  parseYear,
+  todayIso,
+  weekBounds,
+  yearBounds,
+} from "@/lib/journal/calendar";
+import { groupEntries, parseGrouping } from "@/lib/journal/grouping";
 import type { LogType } from "@/lib/db/schema";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { EntryCard } from "@/components/journal/entry-card";
 import { EntryComposer } from "@/components/journal/entry-composer";
 import { TypeFilter } from "@/components/journal/type-filter";
 import { JournalSearch } from "@/components/journal/journal-search";
 import { ViewSwitcher } from "@/components/journal/view-switcher";
-import { parseView } from "@/lib/journal/views";
+import { parseSpan, parseView } from "@/lib/journal/views";
 import { CalendarView } from "@/components/journal/calendar-view";
+import { WeekView } from "@/components/journal/week-view";
+import { YearView } from "@/components/journal/year-view";
+import { SpanSwitcher } from "@/components/journal/span-switcher";
+import { GroupSwitcher } from "@/components/journal/group-switcher";
 import { BoardNote, BoardView } from "@/components/journal/board-view";
 
 export const metadata: Metadata = { title: "Journal" };
@@ -32,8 +46,12 @@ interface Params {
   type?: string;
   q?: string;
   view?: string;
+  span?: string;
+  week?: string;
   month?: string;
+  year?: string;
   day?: string;
+  group?: string;
   compose?: string;
 }
 
@@ -50,14 +68,37 @@ export default async function JournalPage({
       : undefined;
 
   const view = parseView(params.view);
+  const span = parseSpan(params.span);
+  const group = parseGrouping(params.group);
 
   const filter = { type, q: params.q };
 
-  // The calendar works a month at a time; the other two want everything.
-  const { year, month } = parseMonth(params.month);
-  const bounds = monthBounds(year, month);
+  /*
+   * Each span reads its own anchor, so all three stay live in the URL and
+   * switching back and forth does not lose where you were.
+   */
+  const monday = parseWeek(params.week);
+  const { year: monthYear, month } = parseMonth(params.month);
+  const year = parseYear(params.year);
+
+  const bounds =
+    span === "week"
+      ? weekBounds(monday)
+      : span === "year"
+        ? yearBounds(year)
+        : monthBounds(monthYear, month);
+
+  /*
+   * The year view draws from `countsByDay`, a SQL aggregate over the whole
+   * year, and never lists entries — so it does not pay to fetch them. Week
+   * and month do list them, and 400 is far above any real span.
+   */
   const listFilter =
-    view === "calendar" ? { ...filter, ...bounds, limit: 400 } : filter;
+    view !== "calendar"
+      ? filter
+      : span === "year"
+        ? { ...filter, ...bounds, limit: 1 }
+        : { ...filter, ...bounds, limit: 400 };
 
   const [entries, counts, companies, projects, currentCompany] =
     await Promise.all([
@@ -79,12 +120,28 @@ export default async function JournalPage({
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
 
-  // Passed to the calendar so paging months keeps the type and search filters.
+  // Passed to the calendar so paging keeps the type and search filters.
   const query = new URLSearchParams();
   if (params.type) query.set("type", params.type);
   if (params.q) query.set("q", params.q);
+  if (params.group) query.set("group", params.group);
 
-  const wide = view === "board";
+  /*
+   * A day inside whatever is on screen, so changing span keeps its place.
+   * Today when today is in range, because "this month → week" should land on
+   * this week rather than the 1st.
+   */
+  const today = todayIso();
+  const anchor =
+    today >= bounds.from && today <= bounds.to ? today : bounds.from;
+
+  /*
+   * `kind` is the default and writes no param, which is what keeps the list
+   * chronological and the board six columns unless you ask for otherwise.
+   */
+  const grouped = group !== "kind";
+
+  const wide = view === "board" || (view === "calendar" && span === "week");
 
   return (
     <div
@@ -117,21 +174,47 @@ export default async function JournalPage({
           <JournalSearch />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <TypeFilter counts={counts} total={total} />
-            <ViewSwitcher view={view} />
+            <div className="flex flex-wrap items-center gap-2">
+              {view === "calendar" ? (
+                <SpanSwitcher span={span} anchor={anchor} />
+              ) : null}
+              <ViewSwitcher view={view} />
+            </div>
           </div>
+
+          {/* Grouping restructures the list and the board. It is not offered
+              in the calendar, where time is already the organising axis and a
+              second one would fight it. */}
+          {view === "calendar" ? null : <GroupSwitcher group={group} />}
         </div>
       </Suspense>
 
       {view === "calendar" ? (
-        <CalendarView
-          year={year}
-          month={month}
-          counts={dayCounts}
-          entries={entries}
-          selected={params.day}
-          query={query}
-          earliest={earliest}
-        />
+        span === "week" ? (
+          <WeekView
+            monday={monday}
+            entries={entries}
+            query={query}
+            earliest={earliest}
+          />
+        ) : span === "year" ? (
+          <YearView
+            year={year}
+            counts={dayCounts}
+            query={query}
+            earliest={earliest}
+          />
+        ) : (
+          <CalendarView
+            year={monthYear}
+            month={month}
+            counts={dayCounts}
+            entries={entries}
+            selected={params.day}
+            query={query}
+            earliest={earliest}
+          />
+        )
       ) : entries.length === 0 ? (
         <EmptyState
           type={type}
@@ -140,8 +223,36 @@ export default async function JournalPage({
         />
       ) : view === "board" ? (
         <div className="space-y-3">
-          <BoardNote />
-          <BoardView entries={entries} />
+          <BoardNote grouping={group} />
+          <BoardView groups={groupEntries(entries, group)} />
+        </div>
+      ) : grouped ? (
+        <div className="space-y-6">
+          {groupEntries(entries, group).map((section) => (
+            <section key={section.key} className="space-y-3">
+              <div className="flex items-baseline gap-2.5 border-b border-line-subtle pb-1.5">
+                <h2
+                  className={cn(
+                    "text-sm font-semibold",
+                    section.isUnassigned ? "text-fg-muted" : "text-fg",
+                  )}
+                >
+                  {section.label}
+                </h2>
+                <span className="t-num text-xs text-fg-faint">
+                  {section.entries.length}
+                </span>
+              </div>
+
+              <div className="fx-stagger space-y-3">
+                {section.entries.map((entry, i) => (
+                  <div key={entry.id} style={{ "--i": i } as React.CSSProperties}>
+                    <EntryCard entry={entry} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       ) : (
         <div className="fx-stagger space-y-3">

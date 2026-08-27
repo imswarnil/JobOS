@@ -43,6 +43,8 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Search across title, body and impact, held in the URL
 - [x] Career setup: employers, clients, courses and projects
 - [x] Calendar and board views alongside the list
+- [x] Calendar spans — week, month and year, each anchored in the URL
+- [x] Group the list and the board by kind, company, project, tag or tech
 - [x] Quick composer — a type and one line is a complete entry
 - [x] Collapsible sidebar, motion system, installable PWA
 - [ ] Weekly summary digest

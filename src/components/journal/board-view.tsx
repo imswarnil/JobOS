@@ -1,12 +1,13 @@
 import { Building2, Clock } from "lucide-react";
 
-import type { JournalEntry } from "@/lib/journal/queries";
-import { LOG_TYPES } from "@/lib/journal/types";
+import type { Group, Grouping } from "@/lib/journal/grouping";
+import { GROUPING_META } from "@/lib/journal/grouping";
+import { logTypeMeta } from "@/lib/journal/types";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatDate } from "@/lib/utils";
 
 /**
- * A column per kind.
+ * A column per group.
  *
  * Read-only on purpose: the obvious kanban gesture is dragging a card between
  * columns, but "this was a setback, actually it was a win" is a re-reading of
@@ -14,40 +15,53 @@ import { cn, formatDate } from "@/lib/utils";
  * journal feel like a task board, which is the one thing it must not become.
  * Reclassifying is an edit, and it belongs in the entry.
  *
+ * The columns used to be the six log types. They are now whatever the
+ * group-by control says, which costs nothing here — `kind` produces exactly
+ * the six columns it always did — and means "show me Acme beside Personal" is
+ * the same board rather than a second feature.
+ *
  * TODO(Phase 4): the pipeline board over `application` is where drag actually
  * fits, because there the columns really are states.
  */
-export function BoardView({ entries }: { entries: JournalEntry[] }) {
+export function BoardView({ groups }: { groups: Group[] }) {
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
       <div className="flex min-w-max gap-3">
-        {LOG_TYPES.map((type) => {
-          const column = entries.filter((e) => e.type === type.id);
-          const Icon = type.icon;
+        {groups.map((group) => {
+          const meta = group.logType ? logTypeMeta(group.logType) : null;
+          const Icon = meta?.icon;
 
           return (
             <section
-              key={type.id}
-              className="flex w-[17rem] shrink-0 flex-col rounded-card border border-line bg-sunken/60"
-              aria-label={`${type.label} — ${column.length}`}
+              key={group.key}
+              className={cn(
+                "flex w-[17rem] shrink-0 flex-col rounded-card border bg-sunken/60",
+                group.isUnassigned ? "border-dashed border-line" : "border-line",
+              )}
+              aria-label={`${group.label} — ${group.entries.length}`}
             >
               <header className="flex items-center gap-2 border-b border-line-subtle px-3 py-2.5">
-                <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" strokeWidth={2} />
+                {Icon ? (
+                  <Icon
+                    className="h-3.5 w-3.5 shrink-0 text-fg-muted"
+                    strokeWidth={2}
+                  />
+                ) : null}
                 <h3 className="flex-1 truncate text-[0.8125rem] font-semibold text-fg">
-                  {type.label}
+                  {group.label}
                 </h3>
                 <span className="t-num text-xs text-fg-faint">
-                  {column.length}
+                  {group.entries.length}
                 </span>
               </header>
 
               <div className="fx-stagger flex-1 space-y-2 p-2">
-                {column.length === 0 ? (
+                {group.entries.length === 0 ? (
                   <p className="px-1 py-6 text-center text-xs leading-relaxed text-fg-faint">
-                    {type.prompt}
+                    {meta?.prompt ?? "Nothing here."}
                   </p>
                 ) : (
-                  column.map((entry, i) => (
+                  group.entries.map((entry, i) => (
                     <article
                       key={entry.id}
                       style={{ "--i": i } as React.CSSProperties}
@@ -113,13 +127,21 @@ export function BoardView({ entries }: { entries: JournalEntry[] }) {
 }
 
 /** Shown above the board so the read-only choice is explained, not just felt. */
-export function BoardNote() {
+export function BoardNote({ grouping }: { grouping: Grouping }) {
   return (
     <p className="text-xs text-fg-subtle">
-      Grouped by kind.{" "}
+      Grouped by {GROUPING_META[grouping].label.toLowerCase()}.{" "}
       <Badge tone="neutral">Read-only</Badge>{" "}
       Reclassifying an entry is an edit, not a drag — a journal is a record, not
       a task board.
+      {grouping === "tag" || grouping === "tech" ? (
+        <>
+          {" "}
+          An entry with several {grouping === "tag" ? "tags" : "tech tags"}{" "}
+          appears in each of their columns, so the counts add up to more than
+          the number of entries.
+        </>
+      ) : null}
     </p>
   );
 }

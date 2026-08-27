@@ -7,13 +7,17 @@
  * out, and the bug cannot happen.
  */
 
-export interface MonthCell {
+export interface DayCell {
   /** `YYYY-MM-DD`. */
   date: string;
   day: number;
-  inMonth: boolean;
   isToday: boolean;
   isFuture: boolean;
+}
+
+/** A day in a month grid, which also has to say whether it is a spill day. */
+export interface MonthCell extends DayCell {
+  inMonth: boolean;
 }
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -106,4 +110,157 @@ export function monthGrid(year: number, month: number): MonthCell[] {
   }
 
   return cells;
+}
+
+/* ── Days ────────────────────────────────────────────────────────────────── */
+
+/**
+ * A `Date` for a stored day, built from numeric components.
+ *
+ * The distinction this file rests on: `new Date("2026-08-26")` is parsed as
+ * midnight *UTC* and shifts west of Greenwich, while `new Date(2026, 7, 26)`
+ * is local midnight and cannot. Only the second form appears here.
+ */
+function dateOf(date: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Day arithmetic. `Date` normalises overflow, so month and year ends work. */
+export function addDays(date: string, by: number): string {
+  const t = dateOf(date);
+  t.setDate(t.getDate() + by);
+  return iso(t.getFullYear(), t.getMonth() + 1, t.getDate());
+}
+
+function cellFor(date: string, today: string): DayCell {
+  return {
+    date,
+    day: Number(date.slice(8, 10)),
+    isToday: date === today,
+    isFuture: date > today,
+  };
+}
+
+/* ── Weeks ───────────────────────────────────────────────────────────────── */
+
+/** The Monday on or before `date`. Weeks are Monday-first throughout. */
+export function mondayOf(date: string): string {
+  return addDays(date, -((dateOf(date).getDay() + 6) % 7));
+}
+
+/**
+ * Any day in a week identifies the week; the Monday is the canonical form.
+ *
+ * Normalising on read means a link to any day lands on the right week, and
+ * the URL rewrites itself to the Monday — so two people sharing "that week"
+ * end up with the same address.
+ */
+export function parseWeek(value: string | undefined): string {
+  return mondayOf(/^\d{4}-\d{2}-\d{2}$/.test(value ?? "") ? value! : todayIso());
+}
+
+export function shiftWeek(monday: string, by: number): string {
+  return addDays(monday, by * 7);
+}
+
+/** Inclusive query bounds for the week. */
+export function weekBounds(monday: string) {
+  return { from: monday, to: addDays(monday, 6) };
+}
+
+/** `24 – 30 Aug 2026`, collapsing the month when the week does not cross one. */
+export function weekLabel(monday: string): string {
+  const sunday = addDays(monday, 6);
+  const a = dateOf(monday);
+  const b = dateOf(sunday);
+  const sameMonth =
+    a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+
+  const from = a.toLocaleDateString(
+    "en-GB",
+    sameMonth ? { day: "numeric" } : { day: "numeric", month: "short" },
+  );
+  const to = b.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  return `${from} – ${to}`;
+}
+
+/** The seven days, Monday first. */
+export function weekGrid(monday: string): DayCell[] {
+  const today = todayIso();
+  return Array.from({ length: 7 }, (_, i) => cellFor(addDays(monday, i), today));
+}
+
+/* ── Years ───────────────────────────────────────────────────────────────── */
+
+export function parseYear(value: string | undefined): number {
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 1970 && year <= 2999
+    ? year
+    : new Date().getFullYear();
+}
+
+export function yearBounds(year: number) {
+  return { from: iso(year, 1, 1), to: iso(year, 12, 31) };
+}
+
+/** A column of the year heatmap: seven slots, null outside the year. */
+export interface YearWeek {
+  /** The Monday, which is also the React key. */
+  key: string;
+  days: (DayCell | null)[];
+}
+
+/**
+ * The year as week-columns, the shape a contribution heatmap wants.
+ *
+ * Padded with nulls rather than with neighbouring years' days: a month grid
+ * shows spill days because the week is the unit and cutting it looks broken,
+ * but a year is bounded by January and December and showing last December
+ * inside it would be a lie about which year you are reading.
+ */
+export function yearGrid(year: number): YearWeek[] {
+  const today = todayIso();
+  const { from, to } = yearBounds(year);
+  const weeks: YearWeek[] = [];
+
+  for (let cursor = mondayOf(from); cursor <= to; cursor = addDays(cursor, 7)) {
+    weeks.push({
+      key: cursor,
+      days: Array.from({ length: 7 }, (_, i) => {
+        const date = addDays(cursor, i);
+        return date < from || date > to ? null : cellFor(date, today);
+      }),
+    });
+  }
+
+  return weeks;
+}
+
+/** Where each month starts, for the axis above the heatmap. */
+export function yearMonthLabels(
+  weeks: YearWeek[],
+): { label: string; index: number }[] {
+  const labels: { label: string; index: number }[] = [];
+  let seen = -1;
+
+  weeks.forEach((week, index) => {
+    const first = week.days.find(Boolean);
+    if (!first) return;
+
+    const month = Number(first.date.slice(5, 7));
+    if (month === seen) return;
+
+    seen = month;
+    labels.push({
+      label: dateOf(first.date).toLocaleDateString("en-GB", { month: "short" }),
+      index,
+    });
+  });
+
+  return labels;
 }
