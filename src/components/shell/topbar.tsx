@@ -28,7 +28,7 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
         type="button"
         onClick={onOpenNav}
         aria-label="Open navigation"
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-control text-fg-muted transition-colors duration-200 ease-out hover:bg-sunken hover:text-fg lg:hidden"
+        className="fx-tap grid h-9 w-9 shrink-0 place-items-center rounded-control text-fg-muted transition-colors duration-(--animate-duration-1) ease-out hover:bg-sunken hover:text-fg lg:hidden"
       >
         <Menu className="h-4.5 w-4.5" strokeWidth={1.75} />
       </button>
@@ -49,8 +49,8 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
       <Link
         href="/journal"
         className={cn(
-          "hidden h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 md:flex",
-          "text-xs text-fg-faint transition-colors duration-200 ease-out hover:border-line-strong hover:text-fg-muted",
+          "fx-tap hidden h-9 items-center gap-2 rounded-control border border-line bg-surface px-3 md:flex",
+          "text-xs text-fg-faint transition-colors duration-(--animate-duration-1) ease-out hover:border-line-strong hover:text-fg-muted",
         )}
       >
         <Search className="h-3.5 w-3.5" strokeWidth={1.75} />

@@ -18,13 +18,13 @@ export function StatTile({
   value: string | number;
   hint?: string;
   icon: React.ElementType;
-  tone?: "neutral" | "accent" | "craft";
+  tone?: "neutral" | "accent" | "craft" | "zest";
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "rounded-card border border-line bg-surface p-4 shadow-e1 sm:p-5",
+        "fx-lift rounded-card border border-line bg-surface p-4 shadow-e1 sm:p-5",
         className,
       )}
     >
@@ -37,12 +37,21 @@ export function StatTile({
               ? "text-accent"
               : tone === "craft"
                 ? "text-craft"
-                : "text-fg-faint",
+                : tone === "zest"
+                  ? "text-zest"
+                  : "text-fg-faint",
           )}
           strokeWidth={1.75}
         />
       </div>
-      <p className="t-num mt-3 text-3xl font-bold tracking-[-0.03em] text-fg">
+      <p
+        className={cn(
+          "t-num mt-3 text-[2rem] leading-none font-extrabold tracking-[-0.04em]",
+          // The number is the point of the tile, so it is the one thing
+          // allowed to carry the gradient — and only on the tile that matters.
+          tone === "accent" ? "t-gradient" : "text-fg",
+        )}
+      >
         {value}
       </p>
       {hint ? (

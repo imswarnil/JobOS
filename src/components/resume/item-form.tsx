@@ -7,6 +7,7 @@ import { saveItemAction, type ResumeFormState } from "@/lib/resume/actions";
 import { KIND_META, type ResumeItem, type SectionKind } from "@/lib/resume/schema";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
+import { AiAssist } from "@/components/resume/ai-assist";
 import { cn } from "@/lib/utils";
 
 const textarea = cn(
@@ -43,6 +44,57 @@ export function ItemForm({
 
   const [current, setCurrent] = React.useState(item?.current ?? false);
 
+  /**
+   * The assistant talks to these three fields by ref.
+   *
+   * Everything in this form is uncontrolled, and it should stay that way: the
+   * bullets box is the most-typed field on the page, and making it controlled
+   * purely so a side panel can read it would put a React render on every
+   * keystroke. Refs give the panel a live read and the field keeps its
+   * defaultValue behaviour untouched.
+   */
+  const bulletsRef = React.useRef<HTMLTextAreaElement>(null);
+  const titleRef = React.useRef<HTMLInputElement>(null);
+  const subtitleRef = React.useRef<HTMLInputElement>(null);
+
+  const readBullets = React.useCallback(
+    () =>
+      (bulletsRef.current?.value ?? "")
+        .split("\n")
+        .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+        .filter(Boolean),
+    [],
+  );
+
+  /** Appends accepted bullets, keeping what is already written. */
+  const insertBullets = React.useCallback((lines: string[]) => {
+    const el = bulletsRef.current;
+    if (!el) return;
+    const existing = el.value.trim();
+    el.value = existing ? `${existing}\n${lines.join("\n")}` : lines.join("\n");
+    // The form reads .value on submit, but the field is also the thing the
+    // user is looking at — put the caret where the new text landed.
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+
+  /** Swaps one line for its rewrite, leaving every other line alone. */
+  const replaceBullet = React.useCallback(
+    (original: string, replacement: string) => {
+      const el = bulletsRef.current;
+      if (!el) return;
+      const needle = original.trim();
+      el.value = el.value
+        .split("\n")
+        .map((line) =>
+          line.replace(/^[-•*]\s*/, "").trim() === needle ? replacement : line,
+        )
+        .join("\n");
+      el.focus();
+    },
+    [],
+  );
+
   // Collapse once the server confirms. Adjusted during render, not in an
   // effect, so the list repaints already showing the saved entry.
   const [handled, setHandled] = React.useState(false);
@@ -72,6 +124,7 @@ export function ItemForm({
         >
           <Input
             id={`title-${sectionId}-${item?.id ?? "new"}`}
+            ref={titleRef}
             name="title"
             required
             maxLength={160}
@@ -96,6 +149,7 @@ export function ItemForm({
           >
             <Input
               id={`subtitle-${sectionId}-${item?.id ?? "new"}`}
+              ref={subtitleRef}
               name="subtitle"
               maxLength={160}
               defaultValue={item?.subtitle}
@@ -215,6 +269,7 @@ export function ItemForm({
           >
             <textarea
               id={`bullets-${sectionId}-${item?.id ?? "new"}`}
+              ref={bulletsRef}
               name="bullets"
               rows={5}
               defaultValue={item?.bullets.join("\n")}
@@ -228,6 +283,14 @@ export function ItemForm({
             Start with the outcome, not the task. &ldquo;Cut the run to 18
             minutes&rdquo; beats &ldquo;responsible for the billing job&rdquo;.
           </p>
+
+          <AiAssist
+            title={() => titleRef.current?.value ?? ""}
+            subtitle={() => subtitleRef.current?.value ?? ""}
+            readBullets={readBullets}
+            onInsert={insertBullets}
+            onReplace={replaceBullet}
+          />
           <Field
             label="Tech"
             htmlFor={`itemtags-${sectionId}-${item?.id ?? "new"}`}

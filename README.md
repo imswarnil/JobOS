@@ -35,7 +35,7 @@ Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 | **0 · Foundation** | ✅ shipped | Design language, app shell, schema, seams |
 | **1 · Work Journal** | 🔨 in progress | Real accounts, six log types, entry CRUD |
 | **2 · Resume Builder** | 🔨 in progress | Section editor, live ATS preview |
-| 3 · JD tailoring | planned | Gemini rewrite from real facts |
+| 3 · JD tailoring | planned | Rewrite from real facts, local model first |
 | 4–5 · Jobs & agent | planned | Public job APIs, pipeline, scheduled agent |
 | 6 · Stretch | planned | Teams, billing |
 
@@ -52,7 +52,7 @@ Read [`docs/ABSTRACT.md`](docs/ABSTRACT.md) for what it is and why, and
 | Icons | Lucide |
 | Package manager | pnpm |
 | Hosting | Vercel |
-| Models | Gemini (primary) → Groq (fallback) |
+| Models | AnythingLLM → Ollama (self-hosted) → Gemini → Groq (hosted fallback) |
 | App | Installable PWA with offline fallback |
 
 **Database and auth are the same vendor on purpose.** Neon Auth writes its

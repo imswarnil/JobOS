@@ -1,22 +1,26 @@
 import "server-only";
 
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, notInArray, sql } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
 import { llmUsage } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
+import { KNOWN_PROVIDERS, allSelfHosted, isSelfHosted } from "@/lib/llm/providers";
 
 /**
  * RATE LIMIT
  * ==========
  *
- * Every model call in JobOS runs on shared keys that I pay for, so the limit
- * is not a nicety — without it one enthusiastic user (or one retry loop)
- * empties the quota for everyone.
+ * A model call in JobOS may run on shared keys that I pay for, and when it
+ * does the limit is not a nicety — without it one enthusiastic user (or one
+ * retry loop) empties the quota for everyone. When it does not — when the
+ * whole chain is self-hosted — the limit gets out of the way.
  *
- * Five calls per person per rolling 24 hours. Rolling rather than "per
- * calendar day" because a midnight reset invites people to sit and wait for
- * it, and because a window is a WHERE clause rather than a cron job.
+ * Five calls per person per rolling 24 hours — but only while a hosted key is
+ * in the chain. On a local-first deployment the cap lifts itself; see
+ * `fallbackLimit` below. Rolling rather than "per calendar day" because a
+ * midnight reset invites people to sit and wait for it, and because a window
+ * is a WHERE clause rather than a cron job.
  *
  * Enforced by counting rows in `llm_usage`, not by decrementing a counter: a
  * counter cannot tell you why you were blocked or when you will be unblocked,
@@ -25,36 +29,57 @@ import { requireUser } from "@/lib/auth";
  */
 
 /**
- * Five per person per rolling 24 hours by default, overridable — and `0`
- * means unmetered.
+ * Five per person per rolling 24 hours, when there is a paid key in the chain.
  *
- * The limit exists because the hosted providers run on shared keys someone
- * pays for. Point `LLM_PROVIDER_ORDER` at a self-hosted Ollama and that
- * reasoning evaporates: inference on your own hardware has no per-request
- * cost and no quota to exhaust, so capping it is just an obstacle. Set
- * `LLM_RATE_LIMIT=0` there.
+ * The number is arbitrary; what it is protecting is not.
  */
 const DEFAULT_LIMIT = 5;
 
 /**
- * Parsed defensively, because every wrong answer here fails open.
+ * What the cap should be when nobody has said.
+ *
+ * The cap exists for exactly one reason: the hosted providers run on shared
+ * keys someone pays for, and one retry loop can empty the quota for everyone.
+ * With a local-first chain that reasoning can simply stop applying — if every
+ * provider that would actually be called is self-hosted, there is no shared
+ * key left to protect and the cap is pure obstacle.
+ *
+ * So the default is derived rather than fixed. Point JobOS at AnythingLLM
+ * with no hosted keys set and metering disappears on its own, which is the
+ * behaviour you want and the one nobody remembers to configure.
+ */
+function fallbackLimit(): number {
+  return allSelfHosted() ? 0 : DEFAULT_LIMIT;
+}
+
+/**
+ * Parsed defensively, because every wrong answer here changes who pays.
  *
  * `??` would not catch `LLM_RATE_LIMIT=""` — the shape .env.example uses for
  * every unset key — and `Number("")` is `0`, which this file reads as
- * unmetered. A typo would do the same via `NaN`. Either way the cap that
- * protects the shared hosted keys vanishes silently, so anything that is not
- * a deliberate non-negative number falls back to the default.
+ * unmetered. A typo would do the same via `NaN`. Either would silently remove
+ * the cap protecting the hosted keys, so anything that is not a deliberate
+ * non-negative number falls through to `fallbackLimit()`, which asks whether
+ * there is anything to protect rather than assuming there is.
  */
 function configuredLimit(): number {
   const raw = process.env.LLM_RATE_LIMIT?.trim();
-  if (!raw) return DEFAULT_LIMIT;
+  if (!raw) return fallbackLimit();
 
   const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_LIMIT;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallbackLimit();
 }
 
 export const LIMIT = configuredLimit();
 export const WINDOW_HOURS = 24;
+
+/**
+ * Provider names whose calls are free.
+ *
+ * Derived from the provider table rather than written out, so adding a
+ * self-hosted provider cannot leave a stale list here quietly metering it.
+ */
+const SELF_HOSTED = KNOWN_PROVIDERS.filter(isSelfHosted);
 
 /** True when this deployment does not meter model use at all. */
 export function isUnmetered(): boolean {
@@ -89,7 +114,17 @@ export async function getQuota(): Promise<Quota> {
   const [row] = await db
     .select({ n: count(), oldest: sql<Date | null>`min(${llmUsage.createdAt})` })
     .from(llmUsage)
-    .where(and(eq(llmUsage.ownerId, user.id), gte(llmUsage.createdAt, since)));
+    .where(
+      and(
+        eq(llmUsage.ownerId, user.id),
+        gte(llmUsage.createdAt, since),
+        // Self-hosted answers are free, so they do not count. An unsettled
+        // row still reads as "pending", which is not in this list and
+        // therefore does count — deliberately, so a hung or looping call
+        // cannot slip past the cap while it is in flight.
+        notInArray(llmUsage.provider, SELF_HOSTED),
+      ),
+    );
 
   const used = Number(row?.n ?? 0);
   const oldest = row?.oldest ? new Date(row.oldest) : null;

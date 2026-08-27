@@ -88,6 +88,23 @@
 	--violet-600: #6344d6;
 	--violet-700: #4f36ab;
 
+	/* ── Tier 1 · ZEST ───────────────────────────────────────────────────────
+	   The play. Frame & Signal never had this, and JobOS needs it: a career
+	   tool that reads like a compliance dashboard is a career tool nobody
+	   opens on a Sunday. Zest is what the AI touches, what celebrates, and
+	   what marks the thing you just did. It is allowed to be loud because
+	   vermilion still owns "live" and nothing else competes for that. */
+	--zest-50:  #f0fdf6;
+	--zest-100: #d8fbe8;
+	--zest-200: #b0f5d1;
+	--zest-300: #74e9b0;
+	--zest-400: #36d68d;
+	--zest-500: #12bc72;
+	--zest-600: #06975c;
+	--zest-700: #07784c;
+	--zest-800: #095f3e;
+	--zest-900: #094e35;
+
 	--pure-black: #000;
 	--pure-white: #fff;
 }
@@ -132,6 +149,24 @@
 	--craft:      var(--amber-400);
 	--craft-soft: var(--amber-50);
 	--craft-fg:   var(--amber-700);
+
+	/* The second voice. Anything the model touched, anything worth being
+	   pleased about. Never used for state — vermilion still owns "live". */
+	--zest:         var(--zest-500);
+	--zest-hover:   var(--zest-600);
+	--zest-soft:    var(--zest-50);
+	--zest-soft-fg: var(--zest-700);
+	--zest-line:    var(--zest-400);
+	--fg-on-zest:   var(--pure-white);
+
+	/* Gradients are tokens, not one-offs written into a component. Three of
+	   them, each with a job: heat for the primary action, spark for anything
+	   generated, dawn for the wide decorative washes behind empty states. */
+	--grad-heat:  linear-gradient(135deg, var(--signal-500) 0%, var(--amber-400) 100%);
+	--grad-spark: linear-gradient(135deg, var(--zest-500) 0%, var(--azure-500) 100%);
+	--grad-dawn:  linear-gradient(140deg, var(--signal-100) 0%, var(--amber-100) 45%, var(--zest-100) 100%);
+	/* The wash under a "you did it" moment. */
+	--grad-glow:  radial-gradient(120% 100% at 50% 0%, var(--zest-100) 0%, transparent 70%);
 
 	--success-bg:   var(--mint-50);
 	--success-fg:   var(--mint-700);
@@ -212,6 +247,20 @@
 	--craft-soft: rgb(217 163 58 / 0.14);
 	--craft-fg:   var(--amber-200);
 
+	--zest:         var(--zest-400);
+	--zest-hover:   var(--zest-300);
+	--zest-soft:    rgb(18 188 114 / 0.16);
+	--zest-soft-fg: var(--zest-300);
+	--zest-line:    var(--zest-500);
+	/* Dark's zest is bright enough that white type on it fails contrast;
+	   the deep end of the ramp is what stays readable. */
+	--fg-on-zest:   var(--zest-900);
+
+	--grad-heat:  linear-gradient(135deg, var(--signal-500) 0%, var(--amber-400) 100%);
+	--grad-spark: linear-gradient(135deg, var(--zest-400) 0%, var(--azure-500) 100%);
+	--grad-dawn:  linear-gradient(140deg, rgb(240 78 46 / 0.20) 0%, rgb(217 163 58 / 0.16) 45%, rgb(18 188 114 / 0.18) 100%);
+	--grad-glow:  radial-gradient(120% 100% at 50% 0%, rgb(18 188 114 / 0.22) 0%, transparent 70%);
+
 	--success-bg:   rgb(22 160 106 / 0.16);
 	--success-fg:   #6ee7ad;
 	--success-line: var(--mint-500);
@@ -288,6 +337,13 @@
 	--color-craft-soft: var(--craft-soft);
 	--color-craft-fg:   var(--craft-fg);
 
+	--color-zest:         var(--zest);
+	--color-zest-hover:   var(--zest-hover);
+	--color-zest-soft:    var(--zest-soft);
+	--color-zest-soft-fg: var(--zest-soft-fg);
+	--color-zest-line:    var(--zest-line);
+	--color-fg-on-zest:   var(--fg-on-zest);
+
 	--color-success-bg:   var(--success-bg);
 	--color-success-fg:   var(--success-fg);
 	--color-success-line: var(--success-line);
@@ -304,9 +360,12 @@
 	--color-special-fg:   var(--special-fg);
 	--color-special-line: var(--special-line);
 
-	--radius-control: 8px;
-	--radius-card:    16px;
-	--radius-sheet:   24px;
+	/* Rounder than Frame & Signal, on purpose. The corner radius is most of
+	   what separates "software your employer bought" from "software someone
+	   made", and this is a tool you open on a Sunday evening. */
+	--radius-control: 10px;
+	--radius-card:    20px;
+	--radius-sheet:   28px;
 	--radius-pill:    999px;
 
 	--shadow-e1: var(--shadow-1);
@@ -320,16 +379,25 @@
 	--ease-in:     cubic-bezier(0.55, 0, 1, 0.45);
 	--ease-inout:  cubic-bezier(0.65, 0, 0.35, 1);
 	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+	/* Overshoots harder than spring. For things that arrive, never for
+	   things that merely change colour. */
+	--ease-bounce: cubic-bezier(0.28, 1.8, 0.5, 1);
 
 	/* Four durations, and a rule for which one a thing gets:
 	     1  state flips — hover, press, focus
 	     2  the default — colour, opacity, small transforms
 	     3  things that move a real distance — drawers, entrances
-	     4  the deliberate one — scene changes */
-	--animate-duration-1: 120ms;
-	--animate-duration-2: 200ms;
-	--animate-duration-3: 320ms;
-	--animate-duration-4: 560ms;
+	     4  the deliberate one — scene changes
+	
+	   Every one is faster than it was. "Feels slow" is almost never about
+	   the server: 200ms on a hover is perceptible as lag, and a UI where
+	   every state change lands in under 100ms reads as responsive even when
+	   the request behind it takes a second. The distance-travelling ones
+	   keep enough time to be legible and no more. */
+	--animate-duration-1: 90ms;
+	--animate-duration-2: 140ms;
+	--animate-duration-3: 240ms;
+	--animate-duration-4: 420ms;
 
 	--container-rail: 16rem;
 }
@@ -433,6 +501,43 @@
 		background-image: radial-gradient(var(--pattern-ink-2) 1px, transparent 1px);
 		background-size: 16px 16px;
 	}
+
+	/* The three gradient tokens, as backgrounds. */
+	.bg-heat  { background-image: var(--grad-heat); }
+	.bg-spark { background-image: var(--grad-spark); }
+	.bg-dawn  { background-image: var(--grad-dawn); }
+	.bg-glow  { background-image: var(--grad-glow); }
+
+	/* Gradient type. Used for exactly one thing per screen — the number that
+	   is the point of the screen — and never for body copy, where the
+	   fallback colour on an unsupported browser would be invisible. */
+	.t-gradient {
+		background-image: var(--grad-heat);
+		background-clip: text;
+		-webkit-background-clip: text;
+		color: transparent;
+	}
+
+	/* The AI mark. Anything a model produced wears this, so "did I write
+	   this or did it" is answerable at a glance rather than from memory. */
+	.t-generated {
+		color: var(--zest-soft-fg);
+		background: var(--zest-soft);
+		border: 1px solid var(--zest-line);
+	}
+
+	/* A hairline of colour along the top of a card, which is most of what
+	   makes a panel look designed rather than defaulted. */
+	.edge-spark::before,
+	.edge-heat::before {
+		content: "";
+		position: absolute;
+		inset: 0 0 auto 0;
+		height: 3px;
+		border-radius: var(--radius-card) var(--radius-card) 0 0;
+	}
+	.edge-spark::before { background-image: var(--grad-spark); }
+	.edge-heat::before  { background-image: var(--grad-heat); }
 }
 
 /* =============================================================================
@@ -467,6 +572,37 @@
 @keyframes fx-shimmer {
 	from { background-position: -200% 0; }
 	to   { background-position: 200% 0; }
+}
+
+/* Arrives with an overshoot. For a panel that was requested, so the bounce
+   reads as an answer landing rather than as decoration. */
+@keyframes fx-bounce-in {
+	0%   { opacity: 0; transform: scale(0.94) translate3d(0, 8px, 0); }
+	60%  { opacity: 1; transform: scale(1.02) translate3d(0, 0, 0); }
+	100% { opacity: 1; transform: none; }
+}
+
+/* One shake of the head. Errors only — never as a "look at me". */
+@keyframes fx-wiggle {
+	0%, 100% { transform: translate3d(0, 0, 0); }
+	20%      { transform: translate3d(-4px, 0, 0); }
+	40%      { transform: translate3d(3px, 0, 0); }
+	60%      { transform: translate3d(-2px, 0, 0); }
+	80%      { transform: translate3d(1px, 0, 0); }
+}
+
+/* A ring going out from something that just succeeded. */
+@keyframes fx-ping {
+	0%   { opacity: 0.55; transform: scale(0.9); }
+	100% { opacity: 0;    transform: scale(1.9); }
+}
+
+/* The working state. A slow drift across a gradient, so "thinking" does not
+   look like "frozen" during the several seconds a local model takes. */
+@keyframes fx-drift {
+	0%   { background-position:   0% 50%; }
+	50%  { background-position: 100% 50%; }
+	100% { background-position:   0% 50%; }
 }
 
 @keyframes fx-caret {
@@ -519,6 +655,51 @@
 		animation: fx-shimmer 1.4s linear infinite;
 		border-radius: var(--radius-control);
 	}
+
+	.fx-bounce { animation: fx-bounce-in var(--animate-duration-3) var(--ease-bounce) both; }
+	.fx-wiggle { animation: fx-wiggle var(--animate-duration-4) var(--ease-out) both; }
+
+	/* Stagger, but arriving with the bounce. For generated lists, where the
+	   items appearing one after another is what makes a two-second wait feel
+	   like an answer being written rather than a page reloading. */
+	.fx-cascade > * {
+		animation: fx-bounce-in var(--animate-duration-3) var(--ease-bounce) both;
+		animation-delay: calc(min(var(--i, 0), 10) * 55ms);
+	}
+
+	/* A ring pulsing out of a success marker. Sits in an ::after so it
+	   cannot affect layout. */
+	.fx-ping { position: relative; }
+	.fx-ping::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		border: 2px solid var(--zest);
+		animation: fx-ping 620ms var(--ease-out) 2 both;
+		pointer-events: none;
+	}
+
+	/* "A model is thinking." Deliberately not a spinner: a spinner promises
+	   a quick answer, and a 4B model on a laptop does not make that promise. */
+	.fx-working {
+		background-image: linear-gradient(
+			100deg,
+			var(--zest-soft) 0%,
+			var(--bg-surface) 35%,
+			var(--zest-soft) 70%,
+			var(--bg-surface) 100%
+		);
+		background-size: 300% 100%;
+		animation: fx-drift 2.4s var(--ease-inout) infinite;
+	}
+
+	/* Press feedback with a bit of give in it. */
+	.fx-tap {
+		transition: transform var(--animate-duration-1) var(--ease-spring);
+	}
+	.fx-tap:hover:not(:disabled)  { transform: translateY(-1px) scale(1.015); }
+	.fx-tap:active:not(:disabled) { transform: translateY(0) scale(0.965); }
 
 	/* The blinking cursor after typed text. */
 	.fx-caret::after {

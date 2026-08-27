@@ -7,6 +7,7 @@ import { saveBasicsAction, type ResumeFormState } from "@/lib/resume/actions";
 import type { ResumeBasics } from "@/lib/resume/schema";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
+import { AiSummary } from "@/components/resume/ai-summary";
 import {
   Card,
   CardContent,
@@ -29,6 +30,20 @@ export function BasicsForm({ basics }: { basics: ResumeBasics }) {
     ResumeFormState,
     FormData
   >(saveBasicsAction, {});
+
+  // The assistant fills these two by ref, for the same reason the entry form
+  // does it that way: they are uncontrolled fields and should stay that way.
+  const headlineRef = React.useRef<HTMLInputElement>(null);
+  const summaryRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const applyDraft = React.useCallback(
+    ({ headline, summary }: { headline: string; summary: string }) => {
+      if (headlineRef.current && headline) headlineRef.current.value = headline;
+      if (summaryRef.current && summary) summaryRef.current.value = summary;
+      summaryRef.current?.focus();
+    },
+    [],
+  );
 
   const [links, setLinks] = React.useState(
     basics.links.length
@@ -55,6 +70,7 @@ export function BasicsForm({ basics }: { basics: ResumeBasics }) {
             <Field label="Headline" htmlFor="r-headline" hint="Optional">
               <Input
                 id="r-headline"
+                ref={headlineRef}
                 name="headline"
                 defaultValue={basics.headline}
                 maxLength={160}
@@ -84,6 +100,7 @@ export function BasicsForm({ basics }: { basics: ResumeBasics }) {
           <Field label="Summary" htmlFor="r-summary" hint="Optional, 2–3 lines">
             <textarea
               id="r-summary"
+              ref={summaryRef}
               name="summary"
               rows={3}
               maxLength={800}
@@ -96,6 +113,8 @@ export function BasicsForm({ basics }: { basics: ResumeBasics }) {
               )}
             />
           </Field>
+
+          <AiSummary onApply={applyDraft} />
 
           <div className="space-y-2">
             <p className="text-sm font-medium text-fg">Links</p>

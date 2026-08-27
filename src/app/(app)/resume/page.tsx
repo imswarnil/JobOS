@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Download, Eye, FileText } from "lucide-react";
+import { Download, Eye, Wand2 } from "lucide-react";
 
 import {
   getOrCreateResume,
@@ -13,6 +13,7 @@ import { AddSection } from "@/components/resume/add-section";
 import { BasicsForm } from "@/components/resume/basics-form";
 import { LayoutPanel } from "@/components/resume/layout-panel";
 import { ResumePreview } from "@/components/resume/resume-preview";
+import { ResumeDoctor } from "@/components/resume/resume-doctor";
 import { SectionEditor } from "@/components/resume/section-editor";
 import { VersionsPanel } from "@/components/resume/versions-panel";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +57,7 @@ export default async function ResumePage({
     <div className="mx-auto w-full max-w-[100rem] space-y-6">
       <PageHeader
         title="Resume"
-        description="One master resume, built from what you have actually done. Add the sections you need, in the order you want them read — the document on the right is what comes out."
+        description="One master resume, built from what you have actually done. The checks run as you go, and the assistant writes from your journal — never from thin air."
         eyebrow={
           <>
             <Badge tone="accent">Master</Badge>
@@ -75,7 +76,7 @@ export default async function ResumePage({
             }
             target="_blank"
             rel="noopener"
-            className="fx-press inline-flex h-10 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-fg-on-accent shadow-e1 transition-colors duration-200 ease-out hover:bg-accent-hover active:bg-accent-press"
+            className="fx-tap bg-heat inline-flex h-10 items-center gap-2 rounded-control px-4 text-sm font-semibold text-fg-on-accent shadow-e2"
           >
             <Download className="h-4 w-4" strokeWidth={2.25} />
             Download PDF
@@ -86,6 +87,11 @@ export default async function ResumePage({
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* ── Editor ─────────────────────────────────────────────────────── */}
         <div className="space-y-4">
+          {/* The score before the forms. Seeing what is wrong is what makes
+              you fix it; burying the checks under the editor is how they go
+              unread. Instant and free, so it costs nothing to show first. */}
+          <ResumeDoctor data={data} />
+
           {/*
             Keyed on the slice each panel renders.
 
@@ -116,13 +122,12 @@ export default async function ResumePage({
 
           <VersionsPanel versions={versions} viewingId={viewing ? params.version : undefined} />
 
-          <p className="flex items-start gap-2 rounded-control border border-info-line/30 bg-info-bg px-3 py-2.5 text-xs leading-relaxed text-info-fg">
-            <FileText className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-            {/* TODO(Phase 2): React-PDF export rendering this same tree.
-                TODO(Phase 3): generate bullets from journal entries. */}
-            PDF export and tailoring a copy to a specific job description are
-            next. Everything here is already structured data, so both read from
-            it rather than from a document.
+          <p className="flex items-start gap-2 rounded-control border border-zest-line/30 bg-zest-soft px-3 py-2.5 text-xs leading-relaxed text-zest-soft-fg">
+            <Wand2 className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+            Every assistant here works from a closed set of evidence — this
+            resume and your journal — and nothing it writes is saved until you
+            press a save button. Aiming a copy at one specific posting lives on
+            the <Link href="/tailor" className="font-semibold underline underline-offset-2">Tailor</Link> page.
           </p>
         </div>
 

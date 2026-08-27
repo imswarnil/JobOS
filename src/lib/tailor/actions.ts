@@ -1,10 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { desc, eq } from "drizzle-orm";
 
 import { getDb } from "@/lib/db";
-import { company, resumeVersion, workLog } from "@/lib/db/schema";
+import { resumeVersion } from "@/lib/db/schema";
 import { requireUser } from "@/lib/auth";
 import { ownerId } from "@/lib/auth/scope";
 import { ProviderError, completeJson } from "@/lib/llm/providers";
@@ -27,11 +26,12 @@ import {
   type ParsedJob,
   type TailorResult,
 } from "@/lib/tailor/schema";
+import { unsupportedNumbers, type GroundingIssue } from "@/lib/tailor/verify";
 import {
-  buildSourceCorpus,
-  unsupportedNumbers,
-  type GroundingIssue,
-} from "@/lib/tailor/verify";
+  evidenceCorpus,
+  evidenceToText,
+  gatherEvidence,
+} from "@/lib/journal/evidence";
 import { FetchPostingError, fetchPosting } from "@/lib/tailor/fetch-posting";
 
 export interface TailorState {
@@ -46,75 +46,6 @@ export interface TailorState {
   provider?: string;
   /** Set once the tailored copy has been saved as a version. */
   savedVersionId?: string;
-}
-
-/** Journal entries the rewrite is permitted to draw on. */
-async function gatherJournal(owner: string) {
-  const db = getDb();
-  return db
-    .select({
-      title: workLog.title,
-      body: workLog.body,
-      impact: workLog.impact,
-      challenges: workLog.challenges,
-      techTags: workLog.techTags,
-      occurredOn: workLog.occurredOn,
-      companyName: company.name,
-    })
-    .from(workLog)
-    .leftJoin(company, eq(workLog.companyId, company.id))
-    .where(eq(workLog.ownerId, owner))
-    .orderBy(desc(workLog.occurredOn))
-    .limit(80);
-}
-
-function journalToText(rows: Awaited<ReturnType<typeof gatherJournal>>): string {
-  return rows
-    .map((r) =>
-      [
-        `- ${r.occurredOn} ${r.title}${r.companyName ? ` (${r.companyName})` : ""}`,
-        r.body ? `  ${r.body}` : null,
-        r.challenges ? `  difficulty: ${r.challenges}` : null,
-        r.impact ? `  impact: ${r.impact}` : null,
-        r.techTags.length ? `  tech: ${r.techTags.join(", ")}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    )
-    .join("\n");
-}
-
-/** Everything the rewrite may cite, flattened for the grounding check. */
-function sourceCorpus(
-  resume: ResumeData,
-  rows: Awaited<ReturnType<typeof gatherJournal>>,
-): string {
-  const fromResume = resume.sections.flatMap((s) =>
-    s.items.flatMap((i) => [
-      i.title,
-      i.subtitle,
-      i.location,
-      i.startDate,
-      i.endDate,
-      ...i.bullets,
-      ...i.tags,
-    ]),
-  );
-
-  const fromJournal = rows.flatMap((r) => [
-    r.title,
-    r.body,
-    r.impact,
-    r.challenges,
-    ...r.techTags,
-  ]);
-
-  return buildSourceCorpus([
-    ...fromResume,
-    ...fromJournal,
-    resume.basics.summary,
-    resume.basics.headline,
-  ]);
 }
 
 /**
@@ -156,7 +87,7 @@ export async function tailorAction(
 
   const [resumeData, journal] = await Promise.all([
     readResume(),
-    gatherJournal(owner),
+    gatherEvidence(owner),
   ]);
 
   const resume = resumeData ?? parseResume(null, user.name);
@@ -205,7 +136,7 @@ export async function tailorAction(
             null,
             2,
           )}`,
-          `\nTHE WORK JOURNAL (the source of truth about what they did):\n${journalToText(journal)}`,
+          `\nTHE WORK JOURNAL (the source of truth about what they did):\n${evidenceToText(journal)}`,
           `\nReturn JSON in exactly this shape:\n${tailorShape()}`,
         ].join("\n"),
         maxTokens: 6000,
@@ -217,7 +148,7 @@ export async function tailorAction(
     await settleQuota(usageId, { provider, ok: true });
 
     // 3 · Check it did not invent numbers.
-    const corpus = sourceCorpus(resume, journal);
+    const corpus = evidenceCorpus(resume, journal);
     const issues: GroundingIssue[] = [];
 
     for (const section of result.sections) {

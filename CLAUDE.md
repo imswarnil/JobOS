@@ -41,6 +41,30 @@ session, never from the form, and deletes carry the owner in the WHERE clause.
 **Any route reading a session needs `export const dynamic = "force-dynamic"`**
 or Next will prerender one visitor's account into static output.
 
+**Models are local-first, and that is policy rather than a default.** The
+chain is `anythingllm, ollama, gemini, groq` (`src/lib/llm/providers.ts`),
+tried in order until one answers. What travels through this seam is a whole
+work history plus every role someone is quietly considering, so self-hosted
+inference gets first refusal; the hosted keys are the safety net for when the
+box is unreachable. A configured-but-down local provider is not an error — it
+fails and the chain moves on, which is what makes a localhost URL safe to
+leave set in production.
+
+The rate limit follows from the same reasoning: it exists to protect a shared
+paid key, so **only hosted calls count against it** (`src/lib/llm/limit.ts`),
+and it lifts entirely when every configured provider is self-hosted. An
+unsettled row reads as `pending`, which counts — deliberately, so a looping
+call cannot slip past while in flight.
+
+**The resume assistant proposes; it never writes.** Every action in
+`src/lib/resume/ai-actions.ts` returns a suggestion the author accepts by
+hand, and the existing `saveItemAction` / `saveBasicsAction` do the storing.
+Grounding is enforced twice: the prompts get a closed evidence set from
+`src/lib/journal/evidence.ts`, and `unsupportedNumbers` flags any figure the
+sources do not vouch for. `src/lib/resume/lint.ts` handles everything a regex
+can catch — instantly, in the browser, with no model call — so the model is
+only ever spent on judgement.
+
 **Nav, roadmap and homepage are data**, not markup: `src/lib/nav.ts`,
 `src/lib/phases.ts`, `src/lib/marketing.ts`. Shipping a phase means editing
 `phases.ts`, not sweeping templates. The sidebar chip reads whichever phase has
@@ -71,8 +95,16 @@ Frame & Signal — the same system as the rest of imswarnil.com
 consumed as a package, because this is a Tailwind app and that is a
 dependency-free CSS system.
 
-One departure: **a single typeface, Figtree.** The mono "slate" voice survives
-as the `.t-slate` utility — uppercase, wide tracking, small.
+Two departures. **A single typeface, Figtree** — the mono "slate" voice
+survives as the `.t-slate` utility, uppercase and wide-tracked. And a second
+chromatic voice, **zest**, which Frame & Signal does not have: green, used for
+anything a model touched and anything worth being pleased about. Vermilion
+still owns "live" and nothing competes with it for that, which is what lets
+zest be loud.
+
+Radii are rounder than the parent system and every duration is faster
+(90/140/240/420ms). Both are deliberate: this is a tool someone opens on a
+Sunday evening, and a 200ms hover reads as lag.
 
 Tokens live at the top of `src/app/globals.css` in two tiers:
 

@@ -1,10 +1,15 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+/**
+ * `ComponentPropsWithRef` rather than `InputHTMLAttributes`, so callers can
+ * hand this a ref. React 19 passes `ref` as an ordinary prop — no forwardRef
+ * needed — but the attribute type has to admit it exists.
+ */
 export function Input({
   className,
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+}: React.ComponentPropsWithRef<"input">) {
   return (
     <input
       className={cn(

@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Bot, Braces, Database, Download, Palette, Trash2, User } from "lucide-react";
+import { Suspense } from "react";
+import { Braces, Cpu, Download, Palette, Trash2, User } from "lucide-react";
 
 import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { ProfileForm } from "@/components/settings/profile-form";
+import {
+  ModelChain,
+  ModelChainSkeleton,
+} from "@/components/settings/model-chain";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,60 +75,73 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
-            <Braces className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
-            <CardTitle>Integrations</CardTitle>
+            <Cpu className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
+            <CardTitle>The model chain</CardTitle>
           </div>
           <CardDescription>
-            Keys live in environment variables, never in the database. See
+            Tried top to bottom until one answers. Local first on purpose —
+            what goes through here is your whole work history and every role
+            you are considering, and the hosted keys are the safety net rather
+            than the default. Keys live in environment variables, never in the
+            database; see
             <code className="mx-1 rounded-sm bg-sunken px-1 py-0.5 font-mono text-[0.75em]">
               .env.example
             </code>
-            for the full list.
+            .
           </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {/* Probing four hosts is the slowest thing on this page. Streaming
+              it means the rest of settings paints immediately instead of
+              waiting on a box that might be asleep. */}
+          <Suspense fallback={<ModelChainSkeleton />}>
+            <ModelChain />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Braces className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
+            <CardTitle>Other services</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {[
             {
               name: "Neon Postgres",
               detail: "Database and authentication",
-              icon: Database,
-              phase: "Connected",
+              env: "DATABASE_URL",
+              ready: Boolean(process.env.DATABASE_URL),
             },
             {
-              name: "Google Gemini",
-              detail: "Primary model for tailoring",
-              icon: Bot,
-              phase: "Phase 3",
-            },
-            {
-              name: "Groq",
-              detail: "Fallback model",
-              icon: Bot,
-              phase: "Phase 3",
+              name: "Crawl4AI",
+              detail: "Runs a real browser for postings that render client-side",
+              env: "CRAWL4AI_BASE_URL",
+              ready: Boolean(process.env.CRAWL4AI_BASE_URL),
             },
             {
               name: "Adzuna",
               detail: "Job discovery API",
-              icon: Braces,
-              phase: "Phase 4",
+              env: "ADZUNA_APP_ID",
+              ready: Boolean(process.env.ADZUNA_APP_ID),
             },
           ].map((row) => (
             <div
               key={row.name}
               className="flex items-center gap-3 rounded-control border border-line-subtle px-3 py-2.5"
             >
-              <row.icon
-                className="h-4 w-4 shrink-0 text-fg-faint"
-                strokeWidth={1.75}
-              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[0.8125rem] font-medium text-fg">
                   {row.name}
                 </p>
-                <p className="truncate text-xs text-fg-subtle">{row.detail}</p>
+                <p className="truncate text-xs text-fg-subtle">
+                  {row.ready ? row.detail : `${row.env} is not set.`}
+                </p>
               </div>
-              <Badge tone={row.phase === "Connected" ? "success" : "neutral"}>
-                {row.phase}
+              <Badge tone={row.ready ? "success" : "neutral"}>
+                {row.ready ? "Connected" : "Off"}
               </Badge>
             </div>
           ))}

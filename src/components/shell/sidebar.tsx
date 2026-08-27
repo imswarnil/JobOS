@@ -85,9 +85,8 @@ export function Sidebar({
           title="Log today's work"
           aria-label="Log today's work"
           className={cn(
-            "fx-press flex h-10 items-center justify-center gap-2 rounded-control",
-            "bg-accent text-sm font-semibold text-fg-on-accent shadow-e1",
-            "transition-colors duration-200 ease-out hover:bg-accent-hover active:bg-accent-press",
+            "fx-tap bg-heat flex h-10 items-center justify-center gap-2 rounded-control",
+            "text-sm font-semibold text-fg-on-accent shadow-e2",
             collapsed ? "w-9 px-0" : "w-full",
           )}
         >
@@ -126,8 +125,9 @@ export function Sidebar({
                       aria-label={collapsed ? item.label : undefined}
                       title={collapsed ? item.label : item.description}
                       className={cn(
-                        "group relative flex items-center rounded-control text-[0.8125rem] font-medium",
-                        "transition-colors duration-200 ease-out",
+                        "group relative flex items-center rounded-control text-[0.8125rem] font-semibold",
+                        "transition-[color,background-color,transform] duration-(--animate-duration-1) ease-(--ease-spring)",
+                        "hover:translate-x-0.5",
                         collapsed
                           ? "h-9 w-9 justify-center"
                           : "gap-2.5 py-2 pr-2.5 pl-3",
@@ -141,8 +141,9 @@ export function Sidebar({
                       {!collapsed && (
                         <span
                           className={cn(
-                            "absolute top-1/2 left-0 h-4 w-0.5 -translate-y-1/2 rounded-pill transition-opacity duration-200 ease-out",
-                            active ? "bg-accent opacity-100" : "opacity-0",
+                            "absolute top-1/2 left-0 -translate-y-1/2 rounded-pill bg-accent",
+                            "transition-[height,opacity] duration-(--animate-duration-2) ease-(--ease-bounce)",
+                            active ? "h-4 w-0.5 opacity-100" : "h-0 w-0.5 opacity-0",
                           )}
                         />
                       )}

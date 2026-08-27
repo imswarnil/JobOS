@@ -18,14 +18,16 @@ export function Brand({ href = "/dashboard" }: { href?: string }) {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-2.5 rounded-control px-1 py-1"
+      className="fx-tap group flex items-center gap-2.5 rounded-control px-1 py-1"
     >
       <SignalDot />
       <span className="flex flex-col leading-none">
-        <span className="text-[0.9375rem] font-bold tracking-[-0.03em] text-fg">
+        {/* The one gradient wordmark in the app. It is the logo; everything
+            else stays flat so this reads as the mark rather than as a style. */}
+        <span className="t-gradient text-[1rem] font-extrabold tracking-[-0.04em]">
           JobOS
         </span>
-        <span className="mt-1 text-[0.625rem] font-medium tracking-[0.12em] text-fg-faint uppercase">
+        <span className="mt-1 text-[0.625rem] font-semibold tracking-[0.14em] text-fg-faint uppercase">
           Career OS
         </span>
       </span>
