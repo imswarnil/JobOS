@@ -346,6 +346,7 @@ export async function saveLayoutAction(
 
   const parsed = layoutSchema.safeParse({
     style: str(formData, "style") || "classic",
+    theme: str(formData, "theme") || "ink",
     header,
     showSummary: formData.get("showSummary") === "on",
   });

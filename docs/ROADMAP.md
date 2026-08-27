@@ -62,6 +62,8 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Live preview of the ATS-safe document beside the editor
 - [x] Demo account ships with a populated resume
 - [x] Three layouts and an arrangeable header
+- [x] Four finishes — ink, rule, warm, accent — all print-safe, and
+      independent of layout so the two do not multiply
 - [x] Named versions — save, preview, restore
 - [x] PDF export — the browser prints the same DOM as the preview, so the
       two cannot drift; page-break rules keep a role with its bullets

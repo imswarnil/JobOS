@@ -9,6 +9,8 @@ import {
   HEADER_FIELD_META,
   LAYOUTS,
   LAYOUT_META,
+  THEMES,
+  THEME_META,
   type HeaderField,
   type ResumeLayoutConfig,
 } from "@/lib/resume/schema";
@@ -42,6 +44,7 @@ export function LayoutPanel({ layout }: { layout: ResumeLayoutConfig }) {
   >(saveLayoutAction, {});
 
   const [style, setStyle] = React.useState(layout.style);
+  const [theme, setTheme] = React.useState(layout.theme);
   const [order, setOrder] = React.useState<HeaderField[]>(() => {
     // Chosen fields first in their saved order, then the rest so they can be
     // switched back on without losing where they belong.
@@ -68,6 +71,7 @@ export function LayoutPanel({ layout }: { layout: ResumeLayoutConfig }) {
     <Card>
       <form action={formAction}>
         <input type="hidden" name="style" value={style} />
+        <input type="hidden" name="theme" value={theme} />
 
         <CardHeader>
           <CardTitle>Layout</CardTitle>
@@ -110,6 +114,47 @@ export function LayoutPanel({ layout }: { layout: ResumeLayoutConfig }) {
                 </button>
               );
             })}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-fg">Finish</p>
+            <p className="text-xs text-fg-subtle">
+              How headings and rules are drawn. Colour here is decoration —
+              nothing in the document is told apart by it alone, so all four
+              survive a monochrome printer.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {THEMES.map((id) => {
+                const meta = THEME_META[id];
+                const active = id === theme;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setTheme(id)}
+                    aria-pressed={active}
+                    className={cn(
+                      "fx-press rounded-control border p-3 text-left transition-colors duration-200 ease-out",
+                      active
+                        ? "border-line-accent bg-accent-soft"
+                        : "border-line bg-surface hover:border-line-strong hover:bg-sunken",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "block text-sm font-semibold",
+                        active ? "text-accent-soft-fg" : "text-fg",
+                      )}
+                    >
+                      {meta.label}
+                    </span>
+                    <span className="mt-1 block text-xs leading-relaxed text-fg-subtle">
+                      {meta.hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-2">

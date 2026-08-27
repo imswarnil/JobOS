@@ -3,6 +3,7 @@ import {
   type ResumeData,
   type ResumeLayoutConfig,
   type ResumeSection,
+  type ResumeTheme,
 } from "@/lib/resume/schema";
 import { cn } from "@/lib/utils";
 
@@ -18,8 +19,10 @@ import { cn } from "@/lib/utils";
  *     choice is density and emphasis, never structure.
  *   - Standard headings, rendered as headings.
  *   - Contact details as plain text in the body, never in a header element.
- *   - Deliberately monochrome: the accent that carries meaning everywhere
- *     else in JobOS would just be noise printed on A4.
+ *   - Colour is decoration, never information. A theme may tint headings
+ *     and rules, but nothing is ever *only* distinguished by colour — the
+ *     document has to survive a monochrome laser printer, and `ink` (the
+ *     default) does not tint anything at all.
  *
  * TODO(Phase 2): render this same tree through React-PDF so the export and
  * the preview cannot drift apart.
@@ -37,6 +40,50 @@ interface Skin {
   leading: string;
   body: string;
 }
+
+/**
+ * A theme is a set of custom properties plus the section-heading treatment.
+ *
+ * Variables rather than conditional class names because the document is
+ * printed by rendering this exact DOM — anything that resolved differently
+ * between the preview and the print stylesheet would reintroduce the drift
+ * the single-tree approach exists to prevent.
+ */
+interface Theme {
+  ink: string;
+  body: string;
+  muted: string;
+  subtle: string;
+  faint: string;
+  rule: string;
+  head: string;
+  /** The rule under a section heading. Its weight is most of the character. */
+  headRule: string;
+  headClass: string;
+}
+
+const THEME_STYLES: Record<ResumeTheme, Theme> = {
+  ink: {
+    ink: "#111", body: "#222", muted: "#333", subtle: "#555", faint: "#888",
+    rule: "#ccc", head: "#000", headRule: "1px",
+    headClass: "tracking-[0.12em] uppercase",
+  },
+  rule: {
+    ink: "#111", body: "#222", muted: "#333", subtle: "#555", faint: "#888",
+    rule: "#bbb", head: "#000", headRule: "2px",
+    headClass: "tracking-[0.16em] uppercase",
+  },
+  warm: {
+    ink: "#14100e", body: "#241d19", muted: "#3a2f28", subtle: "#5c4d43",
+    faint: "#8b7a6e", rule: "#cdbfb4", head: "#14100e", headRule: "1.5px",
+    headClass: "tracking-[0.14em] uppercase",
+  },
+  accent: {
+    ink: "#111", body: "#222", muted: "#333", subtle: "#555", faint: "#888",
+    rule: "#b9c4d2", head: "#1f3a5f", headRule: "2px",
+    headClass: "tracking-[0.14em] uppercase",
+  },
+};
 
 const SKINS: Record<ResumeLayoutConfig["style"], Skin> = {
   classic: {
@@ -71,6 +118,7 @@ const SKINS: Record<ResumeLayoutConfig["style"], Skin> = {
 export function ResumePreview({ data }: { data: ResumeData }) {
   const { basics, sections, layout } = data;
   const skin = SKINS[layout.style] ?? SKINS.classic;
+  const theme = THEME_STYLES[layout.theme] ?? THEME_STYLES.ink;
   const nonEmpty = sections.filter((s) => s.items.length > 0);
 
   // Only the details the author chose, in the order they chose them.
@@ -86,15 +134,27 @@ export function ResumePreview({ data }: { data: ResumeData }) {
         // print-doc strips the on-screen framing when printing; the document
         // itself is unchanged, which is what keeps the PDF and the preview
         // from ever drifting apart.
-        "print-doc mx-auto w-full max-w-[52rem] bg-white text-[#111] shadow-e2",
+        "print-doc mx-auto w-full max-w-[52rem] bg-white text-[var(--r-ink)] shadow-e2",
         layout.style === "compact"
           ? "px-9 py-9 sm:px-12 sm:py-10"
           : "px-10 py-12 sm:px-14 sm:py-14",
       )}
-      style={{ fontFamily: skin.font }}
+      style={
+        {
+          fontFamily: skin.font,
+          "--r-ink": theme.ink,
+          "--r-body": theme.body,
+          "--r-muted": theme.muted,
+          "--r-subtle": theme.subtle,
+          "--r-faint": theme.faint,
+          "--r-rule": theme.rule,
+          "--r-head": theme.head,
+          "--r-head-rule": theme.headRule,
+        } as React.CSSProperties
+      }
       aria-label="Resume preview"
     >
-      <header className={cn("border-b border-[#ccc] pb-4", skin.headerAlign)}>
+      <header className={cn("border-b border-[var(--r-rule)] pb-4", skin.headerAlign)}>
         <h1
           className={cn(
             skin.nameSize,
@@ -104,11 +164,11 @@ export function ResumePreview({ data }: { data: ResumeData }) {
           {basics.name || "Your name"}
         </h1>
         {basics.headline ? (
-          <p className="mt-1 text-[1.0625rem] text-[#333]">{basics.headline}</p>
+          <p className="mt-1 text-[1.0625rem] text-[var(--r-muted)]">{basics.headline}</p>
         ) : null}
 
         {contact.length || showLinks ? (
-          <p className="mt-2.5 text-[0.8125rem] leading-relaxed text-[#444]">
+          <p className="mt-2.5 text-[0.8125rem] leading-relaxed text-[var(--r-muted)]">
             {contact.join("  ·  ")}
             {contact.length && showLinks ? "  ·  " : ""}
             {showLinks
@@ -126,28 +186,48 @@ export function ResumePreview({ data }: { data: ResumeData }) {
       </header>
 
       {layout.showSummary && basics.summary ? (
-        <p className={cn("mt-5 text-[#222]", skin.body, skin.leading)}>
+        <p className={cn("mt-5 text-[var(--r-body)]", skin.body, skin.leading)}>
           {basics.summary}
         </p>
       ) : null}
 
       {nonEmpty.length === 0 ? (
-        <p className="mt-8 text-center text-[0.875rem] text-[#888] italic">
+        <p className="mt-8 text-center text-[0.875rem] text-[var(--r-faint)] italic">
           Add an entry on the left and it appears here.
         </p>
       ) : null}
 
       {nonEmpty.map((section) => (
-        <Section key={section.id} section={section} skin={skin} />
+        <Section
+          key={section.id}
+          section={section}
+          skin={skin}
+          headClass={theme.headClass}
+        />
       ))}
     </article>
   );
 }
 
-function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
+function Section({
+  section,
+  skin,
+  headClass,
+}: {
+  section: ResumeSection;
+  skin: Skin;
+  /** The theme's heading treatment — tracking and case. */
+  headClass: string;
+}) {
   return (
     <section className={cn("print-section", skin.sectionGap)}>
-      <h2 className="border-b border-[#ccc] pb-1 text-[0.8125rem] font-bold tracking-[0.12em] text-[#000] uppercase">
+      <h2
+        className={cn(
+          "border-b border-[var(--r-rule)] pb-1 text-[0.8125rem] font-bold text-[var(--r-head)]",
+          "[border-bottom-width:var(--r-head-rule)]",
+          headClass,
+        )}
+      >
         {section.title}
       </h2>
 
@@ -159,7 +239,7 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
               className={cn("print-item flex flex-wrap gap-x-2", skin.body)}
             >
               <dt className="font-bold">{item.title}:</dt>
-              <dd className="text-[#222]">
+              <dd className="text-[var(--r-body)]">
                 {item.tags.length ? item.tags.join(", ") : item.subtitle}
               </dd>
             </div>
@@ -178,21 +258,21 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
                   <h3 className="text-[1rem] font-bold">
                     {item.title}
                     {item.subtitle ? (
-                      <span className="font-normal text-[#333]">
+                      <span className="font-normal text-[var(--r-muted)]">
                         {" "}
                         — {item.subtitle}
                       </span>
                     ) : null}
                   </h3>
                   {range ? (
-                    <span className="text-[0.8125rem] whitespace-nowrap text-[#555]">
+                    <span className="text-[0.8125rem] whitespace-nowrap text-[var(--r-subtle)]">
                       {range}
                     </span>
                   ) : null}
                 </div>
 
                 {item.location || item.url ? (
-                  <p className="mt-0.5 text-[0.8125rem] text-[#555]">
+                  <p className="mt-0.5 text-[0.8125rem] text-[var(--r-subtle)]">
                     {item.location}
                     {item.location && item.url ? "  ·  " : ""}
                     {item.url ? (
@@ -206,7 +286,7 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
                 {item.bullets.length ? (
                   <ul
                     className={cn(
-                      "mt-1.5 list-disc space-y-1 pl-5 text-[#222]",
+                      "mt-1.5 list-disc space-y-1 pl-5 text-[var(--r-body)]",
                       skin.body,
                       skin.leading,
                     )}
@@ -218,7 +298,7 @@ function Section({ section, skin }: { section: ResumeSection; skin: Skin }) {
                 ) : null}
 
                 {item.tags.length ? (
-                  <p className="mt-1.5 text-[0.8125rem] text-[#444]">
+                  <p className="mt-1.5 text-[0.8125rem] text-[var(--r-muted)]">
                     {item.tags.join(", ")}
                   </p>
                 ) : null}

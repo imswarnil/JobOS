@@ -53,12 +53,35 @@ export const linkSchema = z.object({
 export const LAYOUTS = ["classic", "modern", "compact"] as const;
 export type ResumeLayout = (typeof LAYOUTS)[number];
 
+/**
+ * The finish, which is a separate question from the layout.
+ *
+ * Style decides density and typeface; theme decides how the page is *marked
+ * up* — how section headings announce themselves and how heavily the rules
+ * are drawn. Keeping them apart is what stops the list becoming nine layouts
+ * that each have to be described.
+ *
+ * All four stay printable and parseable. `ink` is the default and is the
+ * monochrome document the preview was originally built as, because a resume
+ * is read on a laser printer as often as on a screen and colour that carries
+ * meaning on screen carries none on paper.
+ *
+ *   ink      plain headings, hairline rules — unchanged, and the default
+ *   rule     small caps headings over a heavy rule; sections read as blocks
+ *   warm     the same, in warm near-black; softer under office lighting
+ *   accent   one restrained navy on headings and rules, and nowhere else
+ */
+export const THEMES = ["ink", "rule", "warm", "accent"] as const;
+export type ResumeTheme = (typeof THEMES)[number];
+
 /** The header fields, in the order the author wants them. */
 export const HEADER_FIELDS = ["email", "phone", "location", "links"] as const;
 export type HeaderField = (typeof HEADER_FIELDS)[number];
 
 export const layoutSchema = z.object({
   style: z.enum(LAYOUTS).default("classic"),
+  /** Optional so documents stored before themes existed still parse. */
+  theme: z.enum(THEMES).default("ink"),
   /**
    * Which details appear under the name, and in what order. Anything omitted
    * is simply left out — some people do not want a phone number on a document
@@ -86,6 +109,28 @@ export const LAYOUT_META: Record<
   compact: {
     label: "Compact",
     hint: "Modern with the leading pulled in — for a long career on one page.",
+  },
+};
+
+export const THEME_META: Record<
+  ResumeTheme,
+  { label: string; hint: string }
+> = {
+  ink: {
+    label: "Ink",
+    hint: "Plain headings, hairline rules. Monochrome, prints anywhere.",
+  },
+  rule: {
+    label: "Rule",
+    hint: "Small caps over a heavy rule — sections read as distinct blocks.",
+  },
+  warm: {
+    label: "Warm",
+    hint: "Warm near-black rather than pure grey. Softer on paper.",
+  },
+  accent: {
+    label: "Accent",
+    hint: "One restrained navy, on headings and rules only.",
   },
 };
 
@@ -150,6 +195,7 @@ export const resumeSchema = z.object({
    */
   layout: layoutSchema.default({
     style: "classic",
+    theme: "ink",
     header: [...HEADER_FIELDS],
     showSummary: true,
   }),
@@ -221,6 +267,7 @@ export function emptyResume(name = "", email = ""): ResumeData {
     ],
     layout: {
       style: "classic",
+    theme: "ink",
       header: [...HEADER_FIELDS],
       showSummary: true,
     },
