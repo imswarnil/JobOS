@@ -39,6 +39,32 @@ export interface CompletionRequest {
   maxTokens?: number;
   /** Low by default: these are extraction tasks, not creative writing. */
   temperature?: number;
+  /**
+   * Which end of the chain to start from. Defaults to `"self-hosted"`.
+   *
+   * Not a preference — a measurement. On the VPS box (2 vCPU, llama3.2:3b)
+   * the same model does two very different jobs:
+   *
+   *   Resume assistant — review, strengthen, summarise, draft from journal.
+   *   Passes schema validation and produces genuinely useful output. Worth
+   *   the wait, and worth keeping private.
+   *
+   *   JD extraction and tailoring — returns a title, eight responsibilities,
+   *   and no company, no location and no skills, from a page whose second
+   *   line reads "Remote, Bangalore". `isUsableParse` catches it and the
+   *   chain falls through to Gemini, which answers correctly.
+   *
+   * The catch is what that costs. Falling through is not free: the local
+   * model is *tried* first, and on two cores that is 50-180s per call before
+   * the provider that will actually answer is even asked. A tailor run makes
+   * two calls, so local-first turns a 30s job into a five-minute one and then
+   * uses the hosted answer anyway.
+   *
+   * So the caller says which kind of task this is, and the chain starts at
+   * the end likely to answer. Privacy is not given up lightly here — it is
+   * given up only where the local model has been shown not to do the work.
+   */
+  prefer?: "self-hosted" | "hosted";
 }
 
 export interface CompletionResult {
@@ -361,9 +387,24 @@ export function providerOrder(): string[] {
   return order.filter((name) => name in IMPLEMENTATIONS);
 }
 
-/** Those in the configured order that actually have credentials. */
-export function configuredProviders(): string[] {
-  return providerOrder().filter((name) => IMPLEMENTATIONS[name].ready());
+/**
+ * Those in the configured order that actually have credentials.
+ *
+ * `prefer: "hosted"` moves the hosted providers to the front while keeping
+ * each group's relative order — it re-ranks the chain rather than replacing
+ * it, so `LLM_PROVIDER_ORDER` stays the authority on *which* providers exist
+ * and trimming it to `ollama` still means nothing ever leaves the box.
+ */
+export function configuredProviders(
+  prefer: "self-hosted" | "hosted" = "self-hosted",
+): string[] {
+  const ready = providerOrder().filter((name) => IMPLEMENTATIONS[name].ready());
+  if (prefer === "self-hosted") return ready;
+
+  return [
+    ...ready.filter((n) => !isSelfHosted(n)),
+    ...ready.filter((n) => isSelfHosted(n)),
+  ];
 }
 
 /** True when `name` runs on hardware you own. Unknown names are not. */
@@ -434,7 +475,7 @@ const NOTHING_CONFIGURED =
 export async function complete(
   req: CompletionRequest,
 ): Promise<CompletionResult> {
-  const available = configuredProviders();
+  const available = configuredProviders(req.prefer);
 
   if (!available.length) {
     throw new ProviderError("none", NOTHING_CONFIGURED);
@@ -495,7 +536,7 @@ export async function completeJson<T>(
   req: CompletionRequest,
   validate: (value: unknown) => T,
 ): Promise<{ value: T; provider: string }> {
-  const available = configuredProviders();
+  const available = configuredProviders(req.prefer);
 
   if (!available.length) {
     throw new ProviderError("none", NOTHING_CONFIGURED);

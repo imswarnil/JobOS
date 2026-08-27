@@ -123,6 +123,17 @@ export async function getQuota(): Promise<Quota> {
         // therefore does count — deliberately, so a hung or looping call
         // cannot slip past the cap while it is in flight.
         notInArray(llmUsage.provider, SELF_HOSTED),
+        // Neither does a call that failed. The cap rations something the
+        // user receives, and a request where every provider errored
+        // delivered nothing — being locked out of your own tool by three
+        // requests that returned an error message is the cap working against
+        // the person it exists to serve.
+        //
+        // The row survives either way: this is a ledger before it is a
+        // counter, and "which provider failed, and why" is the most useful
+        // thing in it. Retry loops stay bounded, because a call in flight is
+        // `ok = true, provider = "pending"` and counts until it settles.
+        eq(llmUsage.ok, true),
       ),
     );
 

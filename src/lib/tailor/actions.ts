@@ -129,6 +129,10 @@ export async function tailorAction(
         user: `Job posting:\n\n${raw.slice(0, 12_000)}\n\nReturn JSON in exactly this shape:\n${PARSE_SHAPE}`,
         maxTokens: 2000,
         temperature: 0.2,
+        // Measured: the 3B returns a title and nothing else on real
+        // postings, so local-first here means waiting a minute to be told
+        // what we already know. See `prefer` in providers.ts.
+        prefer: "hosted",
       },
       (v) => {
         const job = parsedJobSchema.parse(v);
@@ -159,6 +163,9 @@ export async function tailorAction(
         ].join("\n"),
         maxTokens: 6000,
         temperature: 0.4,
+        // Same reasoning, more so: rewriting a whole resume against a
+        // posting is a much harder structured task than reading one.
+        prefer: "hosted",
       },
       (v) => tailorResultSchema.parse(v),
     );

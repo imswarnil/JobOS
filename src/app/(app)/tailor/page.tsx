@@ -17,7 +17,10 @@ export default async function TailorPage() {
   await requireUser();
 
   const [resume, quota] = await Promise.all([readResume(), getQuota()]);
-  const providers = configuredProviders();
+  // "hosted" because that is the order this page actually uses — reading and
+  // rewriting a posting are the two tasks the local 3B was measured failing.
+  // Showing the default chain here would advertise a route nothing takes.
+  const providers = configuredProviders("hosted");
   const hasResume = Boolean(resume?.sections.some((s) => s.items.length));
 
   return (
