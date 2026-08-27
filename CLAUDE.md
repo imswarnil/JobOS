@@ -38,17 +38,42 @@ design — which is why the *route* is the boundary there.
 **Writes are server actions**, never API routes. The owner comes from the
 session, never from the form, and deletes carry the owner in the WHERE clause.
 
+> One documented exception: **`/api/ingest/*`**, which the n8n discovery runner
+> calls on a schedule with nobody signed in. It is gated on `INGEST_TOKEN` and
+> writes only into `INGEST_OWNER_ID` — the owner is never read from the body,
+> so a leaked token cannot be pointed at another account. Re-import never
+> overwrites `status` or `match_score`; a job you have applied to must not be
+> reset to `found` because the crawler saw it again. See
+> `docs/DISCOVERY-PIPELINE.md`. Do not add a second such endpoint without the
+> same reasoning.
+
+**Discovery is feeds-first, and the one crawl is fenced.** `src/lib/jobs/` is
+public JSON feeds only. The n8n runner additionally reads *one* company career
+page per watchlist entry, with `check_robots_txt` on, no pagination and no
+link-following — and never an aggregator, whose terms forbid it and whose ban
+would take Ghost and n8n down with the VPS's IP. The model in that path judges
+relevance; it does not extract the listings, because a regex found 30/30 links
+in 0.2ms where `llama3.2:3b` found 24/30 in 199s.
+
 **Any route reading a session needs `export const dynamic = "force-dynamic"`**
 or Next will prerender one visitor's account into static output.
 
-**Models are local-first, and that is policy rather than a default.** The
-chain is `anythingllm, ollama, gemini, groq` (`src/lib/llm/providers.ts`),
-tried in order until one answers. What travels through this seam is a whole
-work history plus every role someone is quietly considering, so self-hosted
-inference gets first refusal; the hosted keys are the safety net for when the
-box is unreachable. A configured-but-down local provider is not an error — it
-fails and the chain moves on, which is what makes a localhost URL safe to
-leave set in production.
+**Models are self-hosted first, and that is policy rather than a default.**
+The chain is `ollama, gemini, groq` (`src/lib/llm/providers.ts`), tried in
+order until one answers. What travels through this seam is a whole work
+history plus every role someone is quietly considering, so the box you own
+gets first refusal; the hosted keys are the safety net for when it is asleep.
+A configured-but-down local provider is not an error — it fails and the chain
+moves on, which is what makes a VPS URL safe to leave set even when the box
+is down.
+
+**Two facts about the VPS, measured rather than assumed.** There is no GPU,
+so llama3.2:3b answers a resume review in ~5s on a laptop and ~54s there —
+which is why `TIMEOUT_MS` is 120s, not the 25s that suited hosted APIs. And a
+model larger than RAM is OOM-killed rather than slow: Ollama reports
+`llama-server process has terminated: signal: killed`, which reads like a
+crash. A 9.6 GB gemma4 dies on every call on that box; a 2 GB llama3.2:3b is
+fine. Check model size against `free -h` before pulling.
 
 The rate limit follows from the same reasoning: it exists to protect a shared
 paid key, so **only hosted calls count against it** (`src/lib/llm/limit.ts`),
@@ -61,7 +86,9 @@ call cannot slip past while in flight.
 hand, and the existing `saveItemAction` / `saveBasicsAction` do the storing.
 Grounding is enforced twice: the prompts get a closed evidence set from
 `src/lib/journal/evidence.ts`, and `unsupportedNumbers` flags any figure the
-sources do not vouch for. `src/lib/resume/lint.ts` handles everything a regex
+sources do not vouch for — which is not theoretical: llama3.2:3b turned a
+journal entry saying 3h04m → 18m into "reducing processing time by 80%", and
+the check caught the invented 80%. `src/lib/resume/lint.ts` handles everything a regex
 can catch — instantly, in the browser, with no model call — so the model is
 only ever spent on judgement.
 
@@ -161,4 +188,10 @@ later as Next silently choosing a different port.
 - Seeding through the auth API needs an `Origin` header Neon trusts.
 - Interpolating a Drizzle column into a raw `sql` correlated subquery silently
   returns 0. Use a `leftJoin` + `groupBy`.
+- Crawl4AI is an *upgrade* to `fetch-posting.ts`, never a dependency: it falls
+  back to plain HTTP when the VPS is down. It also asks for `fit_markdown`
+  rather than `raw_markdown`, because the pruned version is the description
+  instead of the description wrapped in a nav bar, a cookie banner and a
+  footer listing every office location — which a small model will happily
+  report as the job's location.
 - Lucide v1 dropped brand icons — the GitHub mark is inline SVG.

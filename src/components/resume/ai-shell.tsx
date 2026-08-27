@@ -22,22 +22,41 @@ import { Badge } from "@/components/ui/badge";
 /**
  * The working state.
  *
- * Not a spinner. A spinner is a promise that this will be quick, and a 4B
- * model on a laptop takes four to fifteen seconds — long enough that a
- * spinning circle starts reading as a hang. A drifting gradient with a line
- * of text saying what is happening survives that wait without lying about it.
+ * Not a spinner. A spinner is a promise that this will be quick, and that
+ * promise is badly broken here: the same 3B model that answers in 5s on a
+ * laptop takes ~54s on a CPU-only VPS. A minute of spinning circle reads as a
+ * hang, and the honest fix is not a faster animation, it is a number.
+ *
+ * So this counts. A ticking second counter is the cheapest possible proof of
+ * life, and past twenty seconds it stops apologising and explains — because
+ * at that point the user's real question has changed from "is this slow" to
+ * "is this broken", and those need different answers.
  */
 export function Working({ label }: { label: string }) {
+  const [elapsed, setElapsed] = React.useState(0);
+
+  React.useEffect(() => {
+    const id = setInterval(() => setElapsed((n) => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div
-      className="fx-working flex items-center gap-2.5 rounded-control border border-zest-line/40 px-3 py-3"
+      className="fx-working flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-control border border-zest-line/40 px-3 py-3"
       role="status"
       aria-live="polite"
     >
       <Sparkles className="h-4 w-4 shrink-0 text-zest" strokeWidth={2.25} />
       <p className="text-[0.8125rem] font-medium text-fg">{label}</p>
-      <span className="ml-auto text-xs text-fg-subtle">
-        Local models take a moment.
+      <span className="t-num ml-auto text-xs font-semibold text-fg-muted">
+        {elapsed}s
+      </span>
+      <span className="w-full text-[0.6875rem] leading-relaxed text-fg-subtle">
+        {elapsed < 20
+          ? "Running on your own hardware."
+          : elapsed < 75
+            ? "Still going. CPU inference on a VPS takes about a minute for this."
+            : "This is longer than usual — it will fall through to a hosted model rather than hang."}
       </span>
     </div>
   );

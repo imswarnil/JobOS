@@ -26,9 +26,21 @@ import {
  * something that was never pulled is the single most common way this goes
  * wrong, it produces a 404 that reads like a network error, and listing the
  * tags catches it in one request.
+ *
+ * Crawl4AI is probed here too. It is not a model provider and does not belong
+ * in the chain, but it fails in exactly the same way — a box that is asleep,
+ * a key that was rotated — and it is the same question a person is asking
+ * when they open this screen: is the stuff on my VPS actually reachable?
  */
 
-const PROBE_TIMEOUT_MS = 6_000;
+/**
+ * Short on purpose, and unrelated to `TIMEOUT_MS` in providers.ts.
+ *
+ * These endpoints list models and report health — they do no inference, so a
+ * slow box is still fast here, and a host that cannot answer `/api/tags` in
+ * ten seconds is a host worth reporting as down.
+ */
+const PROBE_TIMEOUT_MS = 10_000;
 
 export interface ProviderProbe {
   name: string;
@@ -93,58 +105,6 @@ function explain(error: unknown): string {
   }
 }
 
-function base(raw: string): string {
-  return raw.trim().replace(/\/+$/, "").replace(/\/api\/v1$/, "");
-}
-
-/** `/api/v1/auth` answers `{authenticated:true}` for a valid key and 403 otherwise. */
-async function probeAnythingLlm(): Promise<Partial<ProviderProbe>> {
-  const url = base(process.env.ANYTHINGLLM_BASE_URL!);
-  const key = process.env.ANYTHINGLLM_API_KEY;
-
-  const res = await probeFetch(
-    `${url}/api/v1/auth`,
-    key ? { authorization: `Bearer ${key}` } : {},
-  );
-
-  if (res.status === 401 || res.status === 403) {
-    return {
-      reachable: false,
-      detail: key
-        ? "Reached it, but the API key was rejected. Regenerate it under Settings → API Keys."
-        : "Reached it, but no ANYTHINGLLM_API_KEY is set.",
-    };
-  }
-  if (!res.ok) {
-    return { reachable: false, detail: `Answered ${res.status}.` };
-  }
-
-  // The key is good; now check the workspace actually exists, because a wrong
-  // slug fails at call time with an empty response and no explanation.
-  const slug = process.env.ANYTHINGLLM_WORKSPACE ?? "jobos";
-  try {
-    const models = await probeFetch(
-      `${url}/api/v1/openai/models`,
-      key ? { authorization: `Bearer ${key}` } : {},
-    );
-    if (models.ok) {
-      const body = (await models.json()) as { data?: { id?: string }[] };
-      const slugs = (body.data ?? []).map((m) => m.id).filter(Boolean);
-      if (slugs.length && !slugs.includes(slug)) {
-        return {
-          reachable: false,
-          detail: `Connected, but there is no workspace "${slug}". Available: ${slugs.join(", ")}.`,
-        };
-      }
-    }
-  } catch {
-    // Workspace listing is a nicety. A reachable, authenticated instance is
-    // still a pass — don't fail the probe on the optional half of it.
-  }
-
-  return { reachable: true, detail: `Workspace "${slug}" ready.` };
-}
-
 /** `/api/tags` lists what is pulled, which is the check that matters. */
 async function probeOllama(): Promise<Partial<ProviderProbe>> {
   const url = process.env.OLLAMA_BASE_URL!.replace(/\/+$/, "");
@@ -201,8 +161,76 @@ async function probeGroq(): Promise<Partial<ProviderProbe>> {
   return { reachable: true, detail: "Key accepted." };
 }
 
+/**
+ * Crawl4AI, which is not a model provider but fails the same ways.
+ *
+ * `/health` is unauthenticated on every build, so a 200 here means the
+ * container is up — and a 200 with a rejected key on `/crawl` is a different
+ * problem worth telling apart. Checking both is two cheap requests and turns
+ * "pasting a link does nothing" into a sentence you can act on.
+ */
+export async function probeCrawl4ai(): Promise<{
+  configured: boolean;
+  reachable: boolean;
+  detail: string;
+  latencyMs?: number;
+}> {
+  const base = process.env.CRAWL4AI_BASE_URL?.trim();
+  if (!base) {
+    return {
+      configured: false,
+      reachable: false,
+      detail:
+        "CRAWL4AI_BASE_URL is not set. Job links are fetched as plain HTML, which most boards return empty.",
+    };
+  }
+
+  const url = base.replace(/\/+$/, "");
+  const started = Date.now();
+
+  try {
+    const res = await probeFetch(`${url}/health`);
+    const latencyMs = Date.now() - started;
+
+    if (!res.ok) {
+      return {
+        configured: true,
+        reachable: false,
+        latencyMs,
+        detail: `/health answered ${res.status}.`,
+      };
+    }
+
+    const body = (await res.json().catch(() => ({}))) as { version?: string };
+
+    // A running container with a rejected key still cannot fetch anything,
+    // and that failure is invisible until someone pastes a link.
+    if (!process.env.CRAWL4AI_API_KEY) {
+      return {
+        configured: true,
+        reachable: true,
+        latencyMs,
+        detail: `Up${body.version ? ` (v${body.version})` : ""}, but no API key is set — fine on a private network, not on the open internet.`,
+      };
+    }
+
+    return {
+      configured: true,
+      reachable: true,
+      latencyMs,
+      detail: `Up${body.version ? ` (v${body.version})` : ""} and authenticated.`,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      reachable: false,
+      latencyMs: Date.now() - started,
+      detail: explain(error),
+    };
+  }
+}
+
 const PROBES: Record<string, () => Promise<Partial<ProviderProbe>>> = {
-  anythingllm: probeAnythingLlm,
   ollama: probeOllama,
   gemini: probeGemini,
   groq: probeGroq,

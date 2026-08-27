@@ -116,12 +116,6 @@ export default async function SettingsPage() {
               ready: Boolean(process.env.DATABASE_URL),
             },
             {
-              name: "Crawl4AI",
-              detail: "Runs a real browser for postings that render client-side",
-              env: "CRAWL4AI_BASE_URL",
-              ready: Boolean(process.env.CRAWL4AI_BASE_URL),
-            },
-            {
               name: "Adzuna",
               detail: "Job discovery API",
               env: "ADZUNA_APP_ID",

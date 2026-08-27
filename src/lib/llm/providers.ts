@@ -4,30 +4,27 @@ import "server-only";
  * MODEL PROVIDERS
  * ===============
  *
- * Four of them behind one shape, called over plain `fetch` rather than through
- * any vendor's SDK. Every endpoint is a single POST returning JSON; an SDK
- * would add megabytes of dependency and a second abstraction to debug through,
- * and none is worth it for one call.
+ * Three of them behind one shape, called over plain `fetch` rather than
+ * through any vendor's SDK. Every endpoint is a single POST returning JSON; an
+ * SDK would add megabytes of dependency and a second abstraction to debug
+ * through, and none is worth it for one call.
  *
- *   anythingllm  self-hosted — a workspace, so the model carries whatever
- *                documents and system prompt you gave it. Speaks the
- *                OpenAI shape, which is why it needs no special casing.
- *   ollama       self-hosted — raw model, no workspace. The fallback for
- *                when AnythingLLM is down but the box is not.
- *   gemini       hosted — generous free tier, good at structured extraction
- *   groq         hosted — different infrastructure again, so one provider's
- *                rate limit or outage does not take the feature down
+ *   ollama  self-hosted — the VPS box. No quota, no per-request cost, and
+ *           nothing leaves hardware you own.
+ *   gemini  hosted — generous free tier, good at structured extraction
+ *   groq    hosted — different infrastructure again, so one provider's rate
+ *           limit or outage does not take the feature down
  *
- * **The order is local-first**: `anythingllm, ollama, gemini, groq`. The two
- * self-hosted providers cost nothing per call and send nothing off the box, so
- * they get first refusal; the hosted keys exist to catch the case where the
- * local box is asleep, unreachable from Vercel, or simply not good enough at
- * the task. Override with `LLM_PROVIDER_ORDER`.
+ * **The order is self-hosted first**: `ollama, gemini, groq`. What travels
+ * through this seam is a whole work history plus every role someone is
+ * quietly considering, so the box you own gets first refusal; the hosted keys
+ * are the safety net for when it is asleep or unreachable. Override with
+ * `LLM_PROVIDER_ORDER`.
  *
  * A self-hosted provider that is *configured but unreachable* is not a fatal
  * error — it fails, and the chain moves on. That is the whole point of having
- * a chain, and it is what makes `ANYTHINGLLM_BASE_URL=http://localhost:3001`
- * a safe thing to also have set in production.
+ * a chain, and it is what makes `OLLAMA_BASE_URL=http://localhost:11434` a
+ * safe thing to also have set in production.
  *
  * Every call asks for JSON and validates the result at the call site. Models
  * wrap JSON in prose and fences no matter how firmly you ask them not to, so
@@ -60,7 +57,26 @@ export class ProviderError extends Error {
   }
 }
 
-const TIMEOUT_MS = 25_000;
+/**
+ * How long to wait for a provider.
+ *
+ * 25s was fine when every provider was a hosted API answering in two. It is
+ * not fine for CPU inference on a VPS: the same llama3.2:3b that reviews a
+ * resume in 5s on a laptop with a GPU takes 54s on a box without one, so the
+ * old ceiling failed the *first* provider on every long call and quietly
+ * handed the work to Gemini — which looks like "the local model does not
+ * work" and is really "we hung up on it".
+ *
+ * 120s by default, overridable. The number that actually matters is the one
+ * your host allows: on Vercel a server action is bounded by the function's
+ * max duration, and no timeout here can buy time past that. Running JobOS
+ * beside Ollama removes the question entirely, which is one more argument for
+ * option B in docs/NEXT-STEPS.md.
+ */
+const TIMEOUT_MS = (() => {
+  const raw = Number(process.env.LLM_TIMEOUT_MS?.trim());
+  return Number.isFinite(raw) && raw >= 1000 ? raw : 120_000;
+})();
 
 /** A fetch that gives up, so a hung provider cannot hold a request open. */
 async function postJson(
@@ -173,104 +189,6 @@ async function gemini(req: CompletionRequest): Promise<CompletionResult> {
 
 const GROQ_MODEL = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 
-/* ── AnythingLLM ─────────────────────────────────────────────────────────── */
-
-/**
- * The workspace to talk to. AnythingLLM's OpenAI-compatible layer overloads
- * `model` to mean "workspace slug", which is a slightly odd API and a very
- * convenient one: the workspace already carries its own model, system prompt,
- * temperature and attached documents, so switching what JobOS talks to is a
- * change in AnythingLLM rather than a deploy here.
- */
-const ANYTHINGLLM_WORKSPACE = process.env.ANYTHINGLLM_WORKSPACE ?? "jobos";
-
-/**
- * Normalises whatever form of base URL was configured.
- *
- * AnythingLLM's own docs show the base as `http://localhost:3001/api/v1`,
- * its UI shows `http://localhost:3001`, and both are things a person will
- * reasonably paste. Accepting either — rather than 404ing on
- * `/api/v1/api/v1/openai/...` — costs three lines and saves the twenty
- * minutes it takes to work out which half is duplicated.
- */
-function anythingLlmBase(raw: string): string {
-  return raw.trim().replace(/\/+$/, "").replace(/\/api\/v1$/, "");
-}
-
-/**
- * A self-hosted workspace, over AnythingLLM's OpenAI-shaped chat endpoint.
- *
- * This is the default provider, first in the chain, and the reason is not
- * quality — it is that inference you host has no per-request cost, no quota,
- * and no third party reading the contents. What goes through this seam is a
- * person's whole work history and every job they are considering, which is
- * about as personal as a corpus gets. Keeping it on hardware you own is worth
- * a meaningful amount of model quality.
- *
- * `response_format` is deliberately not sent. AnythingLLM passes the request
- * down to whatever engine backs the workspace, and the ones that do not
- * understand the field reject the whole request rather than ignoring it —
- * which turns "JSON might come back fenced" into "nothing comes back at all".
- * `extractJson` already assumes fences, so asking politely in the prompt and
- * cleaning up afterwards is strictly more robust here.
- */
-async function anythingllm(req: CompletionRequest): Promise<CompletionResult> {
-  const configured = process.env.ANYTHINGLLM_BASE_URL;
-  if (!configured) {
-    throw new ProviderError("anythingllm", "ANYTHINGLLM_BASE_URL is not set");
-  }
-
-  const headers: Record<string, string> = {};
-  // AnythingLLM requires a key on every /api/v1 route unless it is running
-  // with auth disabled entirely, which is not a thing to rely on.
-  if (process.env.ANYTHINGLLM_API_KEY) {
-    headers.authorization = `Bearer ${process.env.ANYTHINGLLM_API_KEY}`;
-  }
-
-  const data = (await postJson(
-    `${anythingLlmBase(configured)}/api/v1/openai/chat/completions`,
-    {
-      model: ANYTHINGLLM_WORKSPACE,
-      messages: [
-        { role: "system", content: req.system },
-        { role: "user", content: req.user },
-      ],
-      stream: false,
-      temperature: req.temperature ?? 0.4,
-      max_tokens: req.maxTokens ?? 4000,
-    },
-    headers,
-    "anythingllm",
-  )) as {
-    choices?: { finish_reason?: string; message?: { content?: string } }[];
-    error?: string | { message?: string };
-  };
-
-  // A 200 carrying an `error` is AnythingLLM's way of reporting a bad
-  // workspace slug, so this is the check that turns "empty response" into
-  // "there is no workspace called jobos".
-  if (data.error) {
-    const detail =
-      typeof data.error === "string" ? data.error : data.error.message;
-    throw new ProviderError("anythingllm", detail ?? "Unknown workspace error");
-  }
-
-  const choice = data.choices?.[0];
-  const text = choice?.message?.content;
-
-  if (choice?.finish_reason === "length") {
-    throw new ProviderError("anythingllm", "Ran out of output tokens mid-answer");
-  }
-  if (!text) {
-    throw new ProviderError(
-      "anythingllm",
-      `Empty response from workspace "${ANYTHINGLLM_WORKSPACE}"`,
-    );
-  }
-
-  return { text, provider: "anythingllm" };
-}
-
 /* ── Ollama ──────────────────────────────────────────────────────────────── */
 
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2:3b";
@@ -288,6 +206,19 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? "llama3.2:3b";
  * `OLLAMA_BASE_URL` must be reachable *from wherever JobOS runs*. On Vercel
  * that means publicly reachable and authenticated — a localhost URL will
  * work in development and silently fail in production.
+ *
+ * Two things measured against a real Hostinger VPS, so nobody has to
+ * rediscover them:
+ *
+ *   Speed. There is no GPU, so this is CPU inference: llama3.2:3b answers a
+ *   resume review in ~5s on a laptop and ~54s on that box. Everything about
+ *   the timeout above follows from that gap.
+ *
+ *   Size. A model larger than RAM does not run slowly, it gets OOM-killed —
+ *   Ollama reports `llama-server process has terminated: signal: killed`,
+ *   which reads like a crash rather than "this will never fit". A 9.6 GB
+ *   gemma4 died on every call there while a 2 GB llama3.2:3b was fine. Check
+ *   the model size against `free -h` before pulling, not after.
  */
 async function ollama(req: CompletionRequest): Promise<CompletionResult> {
   const base = process.env.OLLAMA_BASE_URL;
@@ -376,13 +307,6 @@ interface Implementation {
 }
 
 const IMPLEMENTATIONS: Record<string, Implementation> = {
-  anythingllm: {
-    call: anythingllm,
-    ready: () => Boolean(process.env.ANYTHINGLLM_BASE_URL),
-    selfHosted: true,
-    label: "AnythingLLM",
-    envKey: "ANYTHINGLLM_BASE_URL",
-  },
   ollama: {
     call: ollama,
     ready: () => Boolean(process.env.OLLAMA_BASE_URL),
@@ -416,7 +340,7 @@ const IMPLEMENTATIONS: Record<string, Implementation> = {
  * exhaust. The hosted keys are the safety net for when the box is asleep or
  * unreachable — not the default path.
  */
-const DEFAULT_ORDER = ["anythingllm", "ollama", "gemini", "groq"];
+const DEFAULT_ORDER = ["ollama", "gemini", "groq"];
 
 /** Every provider JobOS knows how to speak to, in the default order. */
 export const KNOWN_PROVIDERS = DEFAULT_ORDER;
@@ -491,7 +415,7 @@ export function describeProviders(): ProviderStatus[] {
 
 /** The message shown when nothing at all is configured. */
 const NOTHING_CONFIGURED =
-  "No model provider is configured. Set ANYTHINGLLM_BASE_URL for a local workspace, OLLAMA_BASE_URL for a raw local model, or GEMINI_API_KEY / GROQ_API_KEY for a hosted fallback.";
+  "No model provider is configured. Set OLLAMA_BASE_URL to point at your own box, or GEMINI_API_KEY / GROQ_API_KEY for a hosted fallback.";
 
 /**
  * Walks the chain in order. Falls through on any provider error — a rate

@@ -1,6 +1,13 @@
-import { CheckCircle2, CircleSlash, HardDrive, Cloud, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  CircleSlash,
+  Cloud,
+  Globe,
+  HardDrive,
+  XCircle,
+} from "lucide-react";
 
-import { probeChain, type ProviderProbe } from "@/lib/llm/health";
+import { probeChain, probeCrawl4ai, type ProviderProbe } from "@/lib/llm/health";
 import { LIMIT, isUnmetered } from "@/lib/llm/limit";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -102,7 +109,9 @@ function Row({ probe, position }: { probe: ProviderProbe; position: number | nul
 }
 
 export async function ModelChain() {
-  const chain = await probeChain();
+  // Both at once. They are independent hosts and the panel should take as
+  // long as the slowest, not the sum.
+  const [chain, crawl] = await Promise.all([probeChain(), probeCrawl4ai()]);
 
   const inOrder = chain.filter((p) => p.rank !== null);
   const rest = chain.filter((p) => p.rank === null);
@@ -127,7 +136,7 @@ export async function ModelChain() {
               first.{" "}
               {firstUp!.selfHosted
                 ? "Nothing leaves your hardware unless it fails."
-                : "This is a hosted key — set up AnythingLLM or Ollama to keep your history on your own hardware."}
+                : "This is a hosted key — point OLLAMA_BASE_URL at your VPS to keep your history on hardware you own."}
             </span>
           </>
         ) : (
@@ -157,6 +166,52 @@ export async function ModelChain() {
           </ul>
         </>
       ) : null}
+
+      {/* Not a model provider, so not in the numbered chain — but it fails
+          the same ways, and "is the stuff on my VPS reachable" is the one
+          question this screen exists to answer. */}
+      <div className="border-t border-line-subtle pt-3">
+        <p className="t-slate mb-2">Page fetching</p>
+        <div
+          className={cn(
+            "flex items-start gap-3 rounded-control border px-3 py-2.5",
+            crawl.reachable
+              ? "border-success-line/40 bg-success-bg/40"
+              : crawl.configured
+                ? "border-danger-line/40 bg-danger-bg/30"
+                : "border-line-subtle opacity-70",
+          )}
+        >
+          <Globe
+            className={cn(
+              "mt-0.5 h-4 w-4 shrink-0",
+              crawl.reachable
+                ? "text-success-fg"
+                : crawl.configured
+                  ? "text-danger-fg"
+                  : "text-fg-faint",
+            )}
+            strokeWidth={2}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold text-fg">
+              Crawl4AI
+              <Badge tone={crawl.configured ? "special" : "neutral"}>
+                <HardDrive className="h-2.5 w-2.5" strokeWidth={2.5} />
+                Yours
+              </Badge>
+              {crawl.latencyMs !== undefined ? (
+                <span className="t-num text-[0.6875rem] font-medium text-fg-faint">
+                  {crawl.latencyMs}ms
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-fg-subtle">
+              {crawl.detail}
+            </p>
+          </div>
+        </div>
+      </div>
 
       <p className="text-xs leading-relaxed text-fg-subtle">
         {isUnmetered() ? (
