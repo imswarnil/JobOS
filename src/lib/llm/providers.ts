@@ -67,7 +67,8 @@ export class ProviderError extends Error {
  * handed the work to Gemini — which looks like "the local model does not
  * work" and is really "we hung up on it".
  *
- * 120s by default, overridable. The number that actually matters is the one
+ * 180s by default, overridable — a 10k-char posting parse measured 131s on
+ * a 2-vCPU box, so 120s was still too tight. The number that actually matters is the one
  * your host allows: on Vercel a server action is bounded by the function's
  * max duration, and no timeout here can buy time past that. Running JobOS
  * beside Ollama removes the question entirely, which is one more argument for
@@ -75,7 +76,7 @@ export class ProviderError extends Error {
  */
 const TIMEOUT_MS = (() => {
   const raw = Number(process.env.LLM_TIMEOUT_MS?.trim());
-  return Number.isFinite(raw) && raw >= 1000 ? raw : 120_000;
+  return Number.isFinite(raw) && raw >= 1000 ? raw : 180_000;
 })();
 
 /** A fetch that gives up, so a hung provider cannot hold a request open. */

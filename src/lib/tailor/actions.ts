@@ -20,6 +20,7 @@ import {
   PARSE_SHAPE,
   PARSE_SYSTEM,
   TAILOR_SYSTEM,
+  isUsableParse,
   parsedJobSchema,
   tailorResultSchema,
   tailorShape,
@@ -118,11 +119,28 @@ export async function tailorAction(
     const { value: posting } = await completeJson(
       {
         system: PARSE_SYSTEM,
-        user: `Job posting:\n\n${raw.slice(0, 18_000)}\n\nReturn JSON in exactly this shape:\n${PARSE_SHAPE}`,
+        /**
+         * 12k, not 18k. Prompt processing is the whole cost on a CPU box —
+         * a 10.6k-char posting took 131s on the VPS, past the provider
+         * timeout, so the local model never got to answer. The tail of a
+         * posting is reliably benefits and EEO boilerplate, so the characters
+         * given up are the ones that matter least.
+         */
+        user: `Job posting:\n\n${raw.slice(0, 12_000)}\n\nReturn JSON in exactly this shape:\n${PARSE_SHAPE}`,
         maxTokens: 2000,
         temperature: 0.2,
       },
-      (v) => parsedJobSchema.parse(v),
+      (v) => {
+        const job = parsedJobSchema.parse(v);
+        // Throwing here is what makes the chain fall through. A parse that
+        // validates but is empty is a failed parse — see `isUsableParse`.
+        if (!isUsableParse(job)) {
+          throw new Error(
+            "Parsed the posting but extracted almost nothing from it",
+          );
+        }
+        return job;
+      },
     );
 
     // 2 · Rewrite against it, from the record only.

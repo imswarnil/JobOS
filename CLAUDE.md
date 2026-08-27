@@ -189,9 +189,21 @@ later as Next silently choosing a different port.
 - Interpolating a Drizzle column into a raw `sql` correlated subquery silently
   returns 0. Use a `leftJoin` + `groupBy`.
 - Crawl4AI is an *upgrade* to `fetch-posting.ts`, never a dependency: it falls
-  back to plain HTTP when the VPS is down. It also asks for `fit_markdown`
-  rather than `raw_markdown`, because the pruned version is the description
-  instead of the description wrapped in a nav bar, a cookie banner and a
-  footer listing every office location — which a small model will happily
-  report as the job's location.
+  back to plain HTTP when the VPS is down. Its config must be sent in the
+  typed envelope — `{type: "CrawlerRunConfig", params: {…}}`. A flat object
+  returns 200 with every option silently defaulted, which reads as "the
+  settings do nothing" rather than "the settings never arrived".
+- Use `raw_markdown`, not `fit_markdown`. The `PruningContentFilter` scores a
+  short line like "Remote, Bangalore" as boilerplate and drops it, so the
+  pruned variant loses `location` — a field the parser must fill. Measured on
+  a live posting: raw 10,663 chars with location, fit 9,630 without. Do not
+  exclude the `header` tag either; several boards put the job title in it.
+- An empty parse is a *failed* parse — see `isUsableParse`. A model can
+  satisfy every type in `parsedJobSchema` and have understood nothing, and
+  because it validates, `completeJson` accepts it and never asks the stronger
+  providers. llama3.2:3b does exactly this on real postings.
+- Length caps on model output should trim, not reject. `.max(80)` on a skill
+  makes one verbose string fatal to the whole parse, and small models are
+  worse at "a skill is two words" than large ones — which is the population
+  this chain exists to run on.
 - Lucide v1 dropped brand icons — the GitHub mark is inline SVG.

@@ -104,13 +104,25 @@ function extractText(html: string): string {
  *
  * Two things matter about how it is called here.
  *
- * **`fit_markdown`, not `raw_markdown`.** Crawl4AI can run a pruning filter
- * over the rendered page and return only the content-bearing part. On a job
- * posting that is the difference between the description and the description
- * wrapped in a cookie banner, a nav bar, "similar jobs", and a footer with
- * every office location in it. All of that boilerplate ends up in the prompt
- * otherwise, and a 3B model asked to find the requirements in it will happily
- * report the footer's city list as the location.
+ * **`raw_markdown` with tags excluded, not `fit_markdown`.** This is the
+ * opposite of what it looks like it should be, so it is written down.
+ *
+ * Crawl4AI can run a `PruningContentFilter` and return only the
+ * content-bearing part as `fit_markdown`. That sounds exactly right for a job
+ * posting. Measured against a live GitLab posting on Greenhouse, it is not:
+ *
+ *   raw_markdown   10,663 chars   title ✓   location ✓
+ *   fit_markdown    9,630 chars   title ✓   location ✗
+ *
+ * The filter scores a short line like "Remote, Bangalore" as low-density
+ * boilerplate and drops it — and `location` and `remote` are fields the
+ * parser is required to fill. Ten percent fewer characters is not worth a
+ * field, especially when the prompt truncates at 18,000 anyway.
+ *
+ * `excluded_tags` does the boilerplate removal instead, and does it without
+ * guessing: nav, footer, form and aside are structurally chrome. `header` is
+ * deliberately NOT excluded — several boards put the job title in it, and
+ * losing the title breaks the parse completely.
  *
  * **It falls back rather than failing.** The old version threw when Crawl4AI
  * errored, which meant a VPS that was asleep turned "paste a job link" into a
@@ -122,23 +134,16 @@ interface Crawl4aiResult {
   url?: string;
   success?: boolean;
   error_message?: string;
-  /** A string on older builds, an object with the filtered variants on newer. */
+  /**
+   * A string on older builds, an object on 0.9.x carrying several variants:
+   * raw_markdown, markdown_with_citations, references_markdown, fit_markdown,
+   * fit_html. Only two of them matter here.
+   */
   markdown?:
     | string
     | { raw_markdown?: string; fit_markdown?: string };
   cleaned_html?: string;
 }
-
-/**
- * The pruning filter's threshold.
- *
- * 0.45 is deliberately gentler than Crawl4AI's 0.48 default. Job postings are
- * mostly short bullet fragments, which score low on the density heuristic, and
- * an aggressive threshold starts eating the requirements list — the one part
- * that must survive. Erring toward keeping boilerplate is the right direction
- * here: the model can ignore a nav bar, it cannot recover a dropped bullet.
- */
-const PRUNE_THRESHOLD = 0.45;
 
 async function viaCrawl4ai(url: string, base: string): Promise<string> {
   const controller = new AbortController();
@@ -157,31 +162,41 @@ async function viaCrawl4ai(url: string, base: string): Promise<string> {
       headers,
       body: JSON.stringify({
         urls: [url],
+        /**
+         * The typed envelope, not a flat object.
+         *
+         * Crawl4AI's server deserialises config as `{type, params}` and
+         * silently ignores a bare dictionary — so a flat `{cache_mode: ...}`
+         * returns 200 with every option defaulted, which looks like the
+         * settings not working rather than not arriving. Verified against
+         * 0.9.2: this shape comes back with `fit_markdown` populated, the
+         * flat one does not.
+         */
         crawler_config: {
-          // Never serve a stale copy: a posting that closed yesterday should
-          // read as closed, and these are one-off user-initiated fetches
-          // where there is nothing to gain from a cache.
-          cache_mode: "bypass",
-          // Some boards paint the description after the first paint. Without
-          // a wait the browser returns the same empty shell plain fetch got,
-          // which is the entire failure this service exists to fix.
-          wait_until: "networkidle",
-          page_timeout: 20_000,
-          excluded_tags: ["nav", "header", "footer", "aside", "form"],
-          exclude_external_links: true,
-          remove_overlay_elements: true,
-          markdown_generator: {
-            type: "DefaultMarkdownGenerator",
-            params: {
-              content_filter: {
-                type: "PruningContentFilter",
-                params: {
-                  threshold: PRUNE_THRESHOLD,
-                  threshold_type: "dynamic",
-                  min_word_threshold: 8,
-                },
-              },
+          type: "CrawlerRunConfig",
+          params: {
+            // Never serve a stale copy: a posting that closed yesterday
+            // should read as closed, and these are one-off user-initiated
+            // fetches where there is nothing to gain from a cache.
+            cache_mode: "bypass",
+            // lxml over the default parser — faster, and the difference is
+            // measurable on the heavy single-page apps job boards ship.
+            scraping_strategy: {
+              type: "LXMLWebScrapingStrategy",
+              params: {},
             },
+            // Some boards paint the description after the first paint.
+            // Without a wait the browser returns the same empty shell plain
+            // fetch got, which is the entire failure this service fixes.
+            wait_until: "networkidle",
+            page_timeout: 25_000,
+            // Structurally chrome, on every board. `header` is absent on
+            // purpose — see the note above; the job title often lives there.
+            // `form` is the big one on Greenhouse: excluding the apply form
+            // halved the output, from 21,739 chars to 10,663.
+            excluded_tags: ["nav", "footer", "form", "aside"],
+            exclude_external_links: true,
+            remove_overlay_elements: true,
           },
         },
       }),
@@ -199,7 +214,8 @@ async function viaCrawl4ai(url: string, base: string): Promise<string> {
     const data = (await res.json()) as {
       success?: boolean;
       results?: Crawl4aiResult[];
-      detail?: string;
+      /** FastAPI's validation errors land here, and they are worth reading. */
+      detail?: string | unknown[];
     };
 
     const first = data.results?.[0];
@@ -214,18 +230,25 @@ async function viaCrawl4ai(url: string, base: string): Promise<string> {
       );
     }
     if (!first) {
+      const detail =
+        typeof data.detail === "string"
+          ? data.detail
+          : data.detail
+            ? JSON.stringify(data.detail)
+            : "";
       throw new FetchPostingError(
-        data.detail ? `Crawl4AI: ${data.detail.slice(0, 160)}` : "Crawl4AI returned no result.",
+        detail ? `Crawl4AI: ${detail.slice(0, 160)}` : "Crawl4AI returned no result.",
       );
     }
 
-    // Prefer the pruned markdown, then the raw, then the cleaned HTML. Each
-    // fallback is a real shape some Crawl4AI build returns, not defensive
-    // padding — the markdown field changed type between versions.
+    // Raw first — see the note at the top of this section for why the
+    // filtered variant loses fields the parser needs. `fit_markdown` stays as
+    // a fallback because it is better than nothing when raw comes back empty,
+    // and the string form is what older builds return.
     const md = first.markdown;
     const text =
-      (typeof md === "object" ? md.fit_markdown?.trim() : "") ||
       (typeof md === "string" ? md.trim() : md?.raw_markdown?.trim()) ||
+      (typeof md === "object" ? md.fit_markdown?.trim() : "") ||
       (first.cleaned_html ? extractText(first.cleaned_html) : "");
 
     if (!text || text.length < 200) {

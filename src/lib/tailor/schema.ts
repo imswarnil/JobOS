@@ -22,21 +22,87 @@ import { itemSchema, sectionSchema } from "@/lib/resume/schema";
 
 /* ── Parsing a posting ───────────────────────────────────────────────────── */
 
+/**
+ * A length limit that trims instead of rejecting.
+ *
+ * This distinction cost a real parse, so it is worth stating plainly. The
+ * caps here exist to stop a model returning something unbounded — not to
+ * police prose. But `.max(80)` on a skill makes an over-long skill *fatal*:
+ * `completeJson` treats a schema failure as a provider failure, so one
+ * verbose bullet in `niceToHaveSkills` discards the entire posting parse and
+ * silently falls through to the next provider.
+ *
+ * Measured: llama3.2:3b parsing a live GitLab posting returned three
+ * nice-to-haves as full sentences rather than skill names. Everything else in
+ * the object was correct. Rejecting all of that over three long strings is
+ * the wrong trade — the model was 95% right and got scored zero.
+ *
+ * Small models are worse at following "a skill is two words" than large ones,
+ * which is exactly the population this chain is built to run on. So normalise
+ * on the way in and keep the answer.
+ */
+function capped(max: number) {
+  return z
+    .string()
+    .transform((v) => v.trim().slice(0, max))
+    .pipe(z.string());
+}
+
+/** Same, for arrays: drops empties rather than failing on them. */
+function cappedList(max: number, limit: number) {
+  return z
+    .array(z.unknown())
+    .transform((items) =>
+      items
+        .filter((i): i is string => typeof i === "string")
+        .map((i) => i.trim().slice(0, max))
+        .filter(Boolean)
+        .slice(0, limit),
+    )
+    .default([]);
+}
+
 export const parsedJobSchema = z.object({
-  title: z.string().trim().min(1).max(160),
-  company: z.string().trim().max(160).default(""),
-  location: z.string().trim().max(160).default(""),
+  title: capped(160),
+  company: capped(160).default(""),
+  location: capped(160).default(""),
   remote: z.boolean().default(false),
-  seniority: z.string().trim().max(60).default(""),
+  seniority: capped(60).default(""),
   /** What the posting treats as non-negotiable. */
-  requiredSkills: z.array(z.string().trim().max(80)).max(25).default([]),
-  niceToHaveSkills: z.array(z.string().trim().max(80)).max(25).default([]),
-  responsibilities: z.array(z.string().trim().max(300)).max(20).default([]),
+  requiredSkills: cappedList(80, 25),
+  niceToHaveSkills: cappedList(80, 25),
+  responsibilities: cappedList(300, 20),
   /** The words worth echoing, because a keyword filter is looking for them. */
-  keywords: z.array(z.string().trim().max(60)).max(40).default([]),
+  keywords: cappedList(60, 40),
 });
 
 export type ParsedJob = z.infer<typeof parsedJobSchema>;
+
+/**
+ * Did the parse actually extract anything, or is it just well-formed?
+ *
+ * These are different failures and only one of them is visible. A model that
+ * returns `{title: "AI Engineer", requiredSkills: [], keywords: [],
+ * location: ""}` has satisfied every type in the schema and understood
+ * nothing — and because it validates, `completeJson` accepts it and the
+ * stronger providers behind it are never asked.
+ *
+ * Measured on the VPS: llama3.2:3b parsing a live GitLab posting returned
+ * exactly that. Title right, eight responsibilities, and no skills, no
+ * company and no location — from a page whose second line reads "Remote,
+ * Bangalore". Tailoring against that produces a resume aimed at nothing.
+ *
+ * So emptiness is treated as failure, which is what makes the fallback chain
+ * mean something: a small model gets first refusal and only keeps the work if
+ * it did the work. Deliberately a floor rather than a quality score — three
+ * skills or keywords is the difference between "read the posting" and "did
+ * not", and anything cleverer would start rejecting terse but correct
+ * answers.
+ */
+export function isUsableParse(job: ParsedJob): boolean {
+  if (!job.title.trim()) return false;
+  return job.requiredSkills.length + job.keywords.length >= 3;
+}
 
 export const PARSE_SYSTEM = `You read a job posting and turn it into structured fields.
 
