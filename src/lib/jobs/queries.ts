@@ -217,3 +217,20 @@ export async function countMissingDescriptions(): Promise<number> {
     .where(and(eq(job.ownerId, owner), isNull(job.description)));
   return Number(row?.n ?? 0);
 }
+
+/** The titles being watched. A saved search is a `job_criteria` row. */
+export async function listSavedSearches() {
+  const owner = await ownerId();
+  const db = getDb();
+
+  return db
+    .select({
+      id: jobCriteria.id,
+      title: jobCriteria.title,
+      location: jobCriteria.location,
+      remote: jobCriteria.remote,
+    })
+    .from(jobCriteria)
+    .where(eq(jobCriteria.ownerId, owner))
+    .orderBy(jobCriteria.createdAt);
+}

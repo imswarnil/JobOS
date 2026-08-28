@@ -10,6 +10,9 @@ import {
 } from "@/lib/jobs/queries";
 import { PageHeader } from "@/components/page-header";
 import { JobCard } from "@/components/jobs/job-card";
+import { SavedSearches } from "@/components/jobs/saved-searches";
+import { listSavedSearches } from "@/lib/jobs/queries";
+import { isConfigured as searchConfigured } from "@/lib/jobs/sources/google";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -47,12 +50,13 @@ export default async function JobsPage({
   const status = FILTERS.find((f) => f.status === params.status)?.status;
   const minScore = Number(params.min) || 0;
 
-  const [{ jobs, total, unscored }, counts, any, missingDescriptions] =
+  const [{ jobs, total, unscored }, counts, any, missingDescriptions, searches] =
     await Promise.all([
       listScoredJobs({ status, minScore, q: params.q }),
       jobCounts(),
       hasAnyJobs(),
       countMissingDescriptions(),
+      listSavedSearches(),
     ]);
 
   const strong = jobs.filter((j) => j.breakdown.score >= 70).length;
@@ -73,6 +77,8 @@ export default async function JobsPage({
           </>
         }
       />
+
+      <SavedSearches searches={searches} configured={searchConfigured()} />
 
       {!any ? (
         <Card className="bg-grid p-10 text-center">
