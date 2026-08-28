@@ -35,6 +35,7 @@ import { WeekView } from "@/components/journal/week-view";
 import { YearView } from "@/components/journal/year-view";
 import { SpanSwitcher } from "@/components/journal/span-switcher";
 import { GroupSwitcher } from "@/components/journal/group-switcher";
+import { Refine } from "@/components/journal/refine";
 import { BoardNote, BoardView } from "@/components/journal/board-view";
 
 export const metadata: Metadata = { title: "Journal" };
@@ -151,7 +152,7 @@ export default async function JournalPage({
     >
       <PageHeader
         title="Work journal"
-        description="Everything that made you better at your job — what you shipped, what you learned, what went wrong, and the tricks worth keeping. A company is optional; plenty of this happens on a Sunday."
+        description="What you shipped, learned, broke and figured out."
         actions={
           <Link
             href="/setup"
@@ -170,22 +171,24 @@ export default async function JournalPage({
       />
 
       <Suspense fallback={<div className="h-24" />}>
-        <div className="space-y-4">
-          <JournalSearch />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <TypeFilter counts={counts} total={total} />
-            <div className="flex flex-wrap items-center gap-2">
-              {view === "calendar" ? (
-                <SpanSwitcher span={span} anchor={anchor} />
-              ) : null}
-              <ViewSwitcher view={view} />
-            </div>
+        {/* One row: what you filter by, how you look at it, and everything
+            else folded away. Seven controls above the first entry was the
+            problem; three is a screen you can read. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <TypeFilter counts={counts} total={total} />
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {view === "calendar" ? (
+              <SpanSwitcher span={span} anchor={anchor} />
+            ) : null}
+            <ViewSwitcher view={view} />
+            <Refine active={Boolean(params.q) || group !== "kind"}>
+              <JournalSearch />
+              {/* Grouping restructures the list and the board. It is not
+                  offered in the calendar, where time is already the
+                  organising axis and a second one would fight it. */}
+              {view === "calendar" ? null : <GroupSwitcher group={group} />}
+            </Refine>
           </div>
-
-          {/* Grouping restructures the list and the board. It is not offered
-              in the calendar, where time is already the organising axis and a
-              second one would fight it. */}
-          {view === "calendar" ? null : <GroupSwitcher group={group} />}
         </div>
       </Suspense>
 
