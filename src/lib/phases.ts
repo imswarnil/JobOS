@@ -91,6 +91,7 @@ export const PHASES: Phase[] = [
     status: "planned",
     deliverables: [
       "Greenhouse, Lever and Adzuna connectors",
+      "A company watchlist, and a scheduled runner that works through it",
       "Saved search criteria",
       "Match scoring",
       "Pipeline board from found to offer",

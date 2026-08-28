@@ -32,6 +32,13 @@ VARS=(
   GROQ_API_KEY
   ADZUNA_APP_ID
   ADZUNA_APP_KEY
+  OLLAMA_BASE_URL
+  OLLAMA_MODEL
+  OLLAMA_API_KEY
+  CRAWL4AI_BASE_URL
+  CRAWL4AI_API_KEY
+  INGEST_TOKEN
+  INGEST_OWNER_ID
 )
 
 # Read a value from .env.local, stripping surrounding quotes.

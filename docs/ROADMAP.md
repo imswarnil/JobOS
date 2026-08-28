@@ -95,7 +95,17 @@ The shell, the design language, and the seams every later phase plugs into.
 - [x] Greenhouse and Lever connectors — public per-company JSON feeds,
       no credentials, one board failing never costs the others
 - [x] `discover()` fans out and de-duplicates, within and across sources
-- [ ] A company watchlist to feed them board tokens (needs a migration)
+- [x] A company watchlist (`job_source`) — the single source of truth for
+      which companies get checked, with `last_run_at` and `last_error` so a
+      board that has quietly 404'd is visible rather than merely absent
+- [x] Machine ingest — `/api/ingest/watchlist` and `/api/ingest/jobs`, the
+      documented exception to "writes are server actions", gated on a
+      shared secret bound to one account. Re-import never resets `status`
+- [x] A discovery runner as one n8n workflow on the VPS: public feeds for
+      Greenhouse and Lever, Crawl4AI for a company career page that has no
+      feed, and Ollama to judge relevance by meaning
+      (`docs/DISCOVERY-PIPELINE.md`)
+- [ ] A UI for the watchlist — it is seeded by hand today
 - [ ] Adzuna connector
 - [ ] Saved search criteria
 - [ ] De-duplication and match scoring

@@ -1,0 +1,621 @@
+{
+  "id": "JobOSDiscSync01",
+  "name": "JobOS — Discovery Sync",
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "nodes": [
+    {
+      "id": "trg-schedule",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -620,
+        -60
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trg-webhook",
+      "name": "On demand",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -620,
+        140
+      ],
+      "webhookId": "jobos-discovery-sync",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobos-sync",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "cfg",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        40
+      ],
+      "notes": "The only place URLs and the model live. Everything downstream reads from here.",
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "jobosUrl",
+              "type": "string",
+              "value": "https://job.imswarnil.com"
+            },
+            {
+              "id": "a2",
+              "name": "crawlUrl",
+              "type": "string",
+              "value": "https://crawl.imswarnil.com"
+            },
+            {
+              "id": "a3",
+              "name": "ollamaUrl",
+              "type": "string",
+              "value": "https://ollama-oent.srv1801954.hstgr.cloud"
+            },
+            {
+              "id": "a4",
+              "name": "ollamaModel",
+              "type": "string",
+              "value": "llama3.2:3b"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "get-watchlist",
+      "name": "Get Watchlist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -180,
+        40
+      ],
+      "notes": "The watchlist lives in JobOS, not here. Adding a company must never mean editing this workflow.",
+      "parameters": {
+        "url": "={{ $json.jobosUrl }}/api/ingest/watchlist",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jobos-ingest",
+          "name": "JobOS Ingest"
+        }
+      }
+    },
+    {
+      "id": "split-sources",
+      "name": "Split Sources",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        40,
+        40
+      ],
+      "parameters": {
+        "fieldToSplitOut": "sources",
+        "options": {}
+      }
+    },
+    {
+      "id": "route",
+      "name": "Route by Kind",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        260,
+        40
+      ],
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c1",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "greenhouse",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "greenhouse"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c2",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "lever",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "lever"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c3",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "careerpage",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "careerpage"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "gh-fetch",
+      "name": "Greenhouse Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        -180
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "Public per-company JSON feed. No credentials, no scraping.",
+      "parameters": {
+        "url": "=https://boards-api.greenhouse.io/v1/boards/{{ encodeURIComponent($json.target) }}/jobs?content=true",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "gh-normalize",
+      "name": "Normalize Greenhouse",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        -180
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// One watchlist source in, one ingest payload out.\nconst src = $('Split Sources').item.json;\nconst res = $input.item.json || {};\nconst kw = (src.keywords || []).map(k => String(k).toLowerCase().trim()).filter(Boolean);\n\n// Greenhouse returns its description as entity-encoded HTML: the body arrives\n// as `&lt;div&gt;`, so it must be decoded before it can be stripped, and\n// decoded again afterwards to finish the text inside the tags.\nfunction decode(s) {\n  return String(s).replace(/&(?:amp|lt|gt|quot|apos|nbsp|rsquo|lsquo|rdquo|ldquo|mdash|ndash|hellip|bull|#x?[0-9a-fA-F]+);/g, (m) => {\n    const map = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '\"', '&apos;': \"'\", '&nbsp;': ' ', '&rsquo;': '\\u2019', '&lsquo;': '\\u2018', '&rdquo;': '\\u201d', '&ldquo;': '\\u201c', '&mdash;': '\\u2014', '&ndash;': '\\u2013', '&hellip;': '\\u2026', '&bull;': '\\u2022' };\n    if (map[m]) return map[m];\n    const n = m.match(/^&#(x?)([0-9a-fA-F]+);$/);\n    if (!n) return m;\n    const code = parseInt(n[2], n[1] ? 16 : 10);\n    if (!Number.isFinite(code) || code < 0 || code > 0x10ffff) return m;\n    if (code >= 0xd800 && code <= 0xdfff) return m;\n    return String.fromCodePoint(code);\n  });\n}\nfunction strip(html) {\n  return decode(decode(String(html || ''))\n    .replace(/<(script|style)\\b[^>]*>[\\s\\S]*?<\\/\\1>/gi, ' ')\n    .replace(/<\\/(p|div|li|h[1-6]|tr)>/gi, '\\n')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<[^>]+>/g, ''))\n    .replace(/[ \\t]+/g, ' ').replace(/\\n{3,}/g, '\\n\\n').trim();\n}\n\n// A board token that does not exist is a 404 with a JSON body, not a throw —\n// the HTTP node is set to never error so one dead board cannot end the run.\nif (!Array.isArray(res.jobs)) {\n  const reason = res.error || res.message || `Greenhouse returned no job list for \"${src.target}\"`;\n  return { json: { sourceId: src.id, label: src.label, error: String(reason).slice(0, 500), jobs: [] } };\n}\n\nconst jobs = [];\nfor (const j of res.jobs) {\n  const description = strip(j.content);\n  // OR rather than AND, matching the in-app connectors: one company's board is\n  // already a narrow list, and requiring every keyword drops the role you\n  // wanted because the page said \"Postgres\" and not \"PostgreSQL\".\n  const hay = `${j.title || ''} ${j.location?.name || ''} ${description}`.toLowerCase();\n  if (kw.length && !kw.some(k => hay.includes(k))) continue;\n\n  jobs.push({\n    source: 'greenhouse',\n    externalId: String(j.id),\n    title: String(j.title || '').slice(0, 300),\n    company: src.label,\n    location: j.location?.name ? String(j.location.name).slice(0, 200) : null,\n    remote: /remote/i.test(j.location?.name || ''),\n    url: j.absolute_url || null,\n    description: description ? description.slice(0, 40000) : null,\n    postedAt: j.updated_at ? new Date(j.updated_at).toISOString() : null,\n  });\n}\n\n// The ingest endpoint caps a request at 200; send the freshest.\njobs.sort((a, b) => String(b.postedAt || '').localeCompare(String(a.postedAt || '')));\nreturn { json: { sourceId: src.id, label: src.label, error: null, jobs: jobs.slice(0, 200) } };"
+      }
+    },
+    {
+      "id": "lv-fetch",
+      "name": "Lever Feed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        20
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "Public per-company JSON feed. No credentials, no scraping.",
+      "parameters": {
+        "url": "=https://api.lever.co/v0/postings/{{ encodeURIComponent($json.target) }}?mode=json",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "lv-normalize",
+      "name": "Normalize Lever",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        20
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const src = $('Split Sources').item.json;\nconst res = $input.item.json;\nconst kw = (src.keywords || []).map(k => String(k).toLowerCase().trim()).filter(Boolean);\n\n// Lever answers a bad token with {ok:false}; a good one with a bare array.\n// The HTTP node wraps a top-level array under `data`.\nconst list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : null);\nif (!list) {\n  const reason = res?.error || `No public Lever board called \"${src.target}\"`;\n  return { json: { sourceId: src.id, label: src.label, error: String(reason).slice(0, 500), jobs: [] } };\n}\n\nconst jobs = [];\nfor (const p of list) {\n  const description = String(p.descriptionPlain || '').trim();\n  const location = p.categories?.location || '';\n  const hay = `${p.text || ''} ${location} ${description}`.toLowerCase();\n  if (kw.length && !kw.some(k => hay.includes(k))) continue;\n\n  jobs.push({\n    source: 'lever',\n    externalId: String(p.id),\n    title: String(p.text || '').slice(0, 300),\n    company: src.label,\n    location: location ? String(location).slice(0, 200) : null,\n    remote: /remote/i.test(`${location} ${p.workplaceType || ''}`),\n    url: p.hostedUrl || null,\n    description: description ? description.slice(0, 40000) : null,\n    // Lever dates are epoch milliseconds, not ISO strings.\n    postedAt: p.createdAt ? new Date(Number(p.createdAt)).toISOString() : null,\n  });\n}\n\njobs.sort((a, b) => String(b.postedAt || '').localeCompare(String(a.postedAt || '')));\nreturn { json: { sourceId: src.id, label: src.label, error: null, jobs: jobs.slice(0, 200) } };"
+      }
+    },
+    {
+      "id": "cp-crawl",
+      "name": "Crawl Career Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        240
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "One page, once. check_robots_txt is what keeps that promise enforceable rather than merely intended — do not turn it off.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.crawlUrl }}/crawl",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ urls: [$json.target], crawler_config: { cache_mode: 'bypass', check_robots_txt: true, page_timeout: 45000 } }) }}",
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "crawl4ai",
+          "name": "Crawl4AI"
+        }
+      }
+    },
+    {
+      "id": "cp-links",
+      "name": "Extract Job Links",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        240
+      ],
+      "notes": "Deterministic on purpose. Measured against llama3.2:3b on this exact step: regex found 30/30 links in 0.2ms, the model found 24/30 in 199s.",
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const src = $('Split Sources').item.json;\nconst cfg = $('Config').first().json;\nconst res = $input.item.json || {};\nconst result = (res.results || [])[0];\n\nif (!result || result.success !== true) {\n  // A page disallowed by robots.txt lands here, and that is a correct outcome\n  // rather than a failure to work around. It is recorded against the source.\n  const reason = result?.error_message || 'Crawl returned nothing — the page may be disallowed by robots.txt.';\n  return { json: { sourceId: src.id, label: src.label, error: String(reason).slice(0, 500), jobs: [], skipModel: true } };\n}\n\nconst md = typeof result.markdown === 'string' ? result.markdown : (result.markdown?.raw_markdown || '');\n\n// Stable id from the URL, so the same posting is not re-imported every run.\n// djb2 — short, deterministic, and it never has to be reversed.\nfunction hash(s) {\n  let h = 5381;\n  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;\n  return h.toString(16);\n}\n\nconst page = String(src.target);\nconst JOBBISH = /\\/(jobs?|careers?|positions?|openings?|vacanc(y|ies))\\//i;\nconst seen = new Set();\nconst found = [];\n\nfor (const m of md.matchAll(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^)\\s]+)\\)/g)) {\n  const title = m[1].replace(/\\s+/g, ' ').trim();\n  const url = m[2].split('#')[0];\n  if (!title || title.length < 3 || title.length > 200) continue;\n  if (url === page || seen.has(url)) continue;\n  // A job link either sits under a jobs/careers path or carries a long\n  // numeric posting id. Nav links (\"Pricing\", \"Login\") match neither.\n  if (!JOBBISH.test(url) && !/\\/\\d{6,}/.test(url)) continue;\n  // Markdown images inside a link render as titles like \"![](...)\".\n  if (/^!\\[/.test(title)) continue;\n  seen.add(url);\n  found.push({\n    title: title.replace(/\\s*(Full-time|Part-time|Contract|Internship|Intern|Temporary)\\s*$/i, '').trim(),\n    url,\n  });\n  if (found.length >= 120) break;\n}\n\nconst interests = (src.keywords || []).filter(Boolean).join(', ');\nconst listing = found.map((j, i) => `${i}. ${j.title}`).join('\\n');\n\n// Built here rather than in the HTTP node so the prompt and the list it\n// describes cannot drift apart.\nconst ollamaBody = {\n  model: cfg.ollamaModel,\n  stream: false,\n  keep_alive: '30m',\n  options: { temperature: 0, num_ctx: 4096 },\n  format: { type: 'object', properties: { keep: { type: 'array', items: { type: 'integer' } } }, required: ['keep'] },\n  prompt: (interests\n    ? `A job seeker is interested in: ${interests}.\\n\\nFrom the numbered list below, return the numbers of the roles plausibly relevant to those interests. Judge by meaning, not by exact words.`\n    : 'From the numbered list below, return the numbers of every entry that is a real job opening rather than a navigation link.'\n  ) + ' Return JSON only.\\n\\n' + listing,\n};\n\nreturn {\n  json: {\n    sourceId: src.id,\n    label: src.label,\n    pageUrl: page,\n    candidates: found.map(j => ({ ...j, externalId: hash(j.url) })),\n    ollamaBody,\n    // Nothing to ask a model about, so the call is skipped rather than sent empty.\n    skipModel: found.length === 0,\n  },\n};"
+      }
+    },
+    {
+      "id": "cp-model",
+      "name": "Ollama — Relevance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1000,
+        240
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "The model's one job: judge relevance by meaning, where a keyword match cannot. It is never asked to extract the links — that is what the previous node is for. CPU inference: allow minutes, not seconds.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.ollamaUrl }}/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.ollamaBody || { model: $('Config').first().json.ollamaModel, prompt: 'return {\"keep\":[]}', stream: false }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "cp-normalize",
+      "name": "Normalize Career Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1240,
+        240
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const prev = $('Extract Job Links').item.json;\n\n// The crawl already failed, or there was nothing to judge.\nif (prev.error) {\n  return { json: { sourceId: prev.sourceId, label: prev.label, error: prev.error, jobs: [] } };\n}\n\nconst candidates = prev.candidates || [];\nlet keep = null;\n\ntry {\n  const parsed = JSON.parse($input.item.json?.response ?? '{}');\n  if (Array.isArray(parsed.keep)) keep = new Set(parsed.keep.map(Number));\n} catch (e) {\n  keep = null;\n}\n\n// A model that timed out, returned prose, or hallucinated indices must not\n// silently empty the run. Falling back to every candidate errs toward showing\n// too many jobs, which costs a scroll; the other direction loses the role.\nconst chosen = keep && keep.size\n  ? candidates.filter((_, i) => keep.has(i))\n  : candidates;\n\nconst jobs = chosen.map(c => ({\n  source: 'careerpage',\n  externalId: c.externalId,\n  title: c.title.slice(0, 300),\n  company: prev.label,\n  location: null,\n  remote: /remote/i.test(c.title),\n  url: c.url,\n  // Deliberately absent. The description lives on the posting's own page, and\n  // fetching it would mean following links out of a listing — exactly the\n  // bulk crawl this pipeline promises not to do. Open the job in JobOS and\n  // use \"fetch from URL\" there, which is a single page on a user action.\n  description: null,\n  postedAt: null,\n}));\n\nreturn {\n  json: {\n    sourceId: prev.sourceId,\n    label: prev.label,\n    error: keep === null && candidates.length ? 'Relevance model unavailable — imported every candidate.' : null,\n    jobs: jobs.slice(0, 200),\n  },\n};"
+      }
+    },
+    {
+      "id": "post",
+      "name": "Send to JobOS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1500,
+        40
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "notes": "Runs once per source, so each one records its own last_run_at and last_error. Idempotent — re-running the whole watchlist re-imports nothing.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.jobosUrl }}/api/ingest/jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sourceId: $json.sourceId, error: $json.error, jobs: $json.jobs }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jobos-ingest",
+          "name": "JobOS Ingest"
+        }
+      }
+    },
+    {
+      "id": "summary",
+      "name": "Run Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1740,
+        40
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// One row per source, so a board that has quietly 404'd for a month is\n// visible here and in the JobOS UI rather than just missing from the results.\nconst rows = [];\nlet inserted = 0, updated = 0, failed = 0;\n\nfor (let i = 0; i < items.length; i++) {\n  const res = items[i].json || {};\n  let sent = {};\n  try { sent = $('Send to JobOS').all()[i]?.json ?? {}; } catch (e) { sent = {}; }\n  const label = res.label ?? sent.label ?? 'source ' + (i + 1);\n\n  const ok = typeof res.inserted === 'number';\n  if (!ok) failed++;\n  inserted += res.inserted || 0;\n  updated += res.updated || 0;\n\n  rows.push({\n    source: label,\n    inserted: res.inserted ?? 0,\n    updated: res.updated ?? 0,\n    error: res.error ?? null,\n  });\n}\n\nreturn [{ json: { ranAt: new Date().toISOString(), sources: rows.length, inserted, updated, failed, rows } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On demand": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get Watchlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Watchlist": {
+      "main": [
+        [
+          {
+            "node": "Split Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sources": {
+      "main": [
+        [
+          {
+            "node": "Route by Kind",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Kind": {
+      "main": [
+        [
+          {
+            "node": "Greenhouse Feed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lever Feed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Crawl Career Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Greenhouse Feed": {
+      "main": [
+        [
+          {
+            "node": "Normalize Greenhouse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lever Feed": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lever",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crawl Career Page": {
+      "main": [
+        [
+          {
+            "node": "Extract Job Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Job Links": {
+      "main": [
+        [
+          {
+            "node": "Ollama — Relevance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama — Relevance": {
+      "main": [
+        [
+          {
+            "node": "Normalize Career Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Greenhouse": {
+      "main": [
+        [
+          {
+            "node": "Send to JobOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lever": {
+      "main": [
+        [
+          {
+            "node": "Send to JobOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Career Page": {
+      "main": [
+        [
+          {
+            "node": "Send to JobOS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to JobOS": {
+      "main": [
+        [
+          {
+            "node": "Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

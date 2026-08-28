@@ -2,10 +2,29 @@
  * JOB DISCOVERY SEAM — Phase 4
  * ============================
  *
- * Discovery goes through documented public APIs and published job feeds only.
- * No scraping, no logging into anyone's account, no circumventing a robots.txt
- * or a rate limit. Every connector below is a client for an interface its
+ * Discovery goes through documented public APIs and published job feeds first.
+ * No logging into anyone's account, no circumventing a robots.txt or a rate
+ * limit. Every connector in this file is a client for an interface its
  * provider publishes on purpose.
+ *
+ * There is now one source that is not a published feed, and pretending
+ * otherwise in this comment would be the first step to losing the rule
+ * altogether. A `careerpage` watchlist entry is read with a headless browser,
+ * because plenty of companies run no ATS with a public feed and the choice is
+ * that or not seeing their roles at all. It is kept to the narrowest thing
+ * that works, and the limits are mechanical rather than aspirational:
+ *
+ *   - One URL, typed in by the owner. Never discovered, never followed.
+ *   - One page per run. No pagination, no link-following into detail pages.
+ *   - `check_robots_txt` on, so a site that says no gets a recorded failure
+ *     rather than a workaround.
+ *   - Aggregators are out. Their terms forbid it, they block datacentre IPs,
+ *     and one ban would take the rest of the box's services down with it.
+ *
+ * That work happens in the n8n runner rather than here, because a crawl plus
+ * a local model outlives a serverless function — see docs/DISCOVERY-PIPELINE.md.
+ * This file stays feeds-only, and the runner posts its results to
+ * /api/ingest/jobs in the same `DiscoveredJob` shape.
  *
  * Each source normalises into the same `DiscoveredJob` shape, so ranking,
  * de-duplication and storage never learn where a posting came from.

@@ -29,6 +29,13 @@
       "when": 1787771201275,
       "tag": "0003_llm_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787866954919,
+      "tag": "0004_job_source",
+      "breakpoints": true
     }
   ]
 }

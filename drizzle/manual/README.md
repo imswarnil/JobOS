@@ -17,3 +17,4 @@ safe to apply the whole directory after any `pnpm db:migrate`.
 | --- | --- |
 | `001_owner_foreign_keys.sql` | Targets `neon_auth.user`, a table Neon Auth provisions. Drizzle must not reach that schema, or every generated migration tries to `CREATE SCHEMA "neon_auth"`. |
 | `002_llm_usage_owner_fk.sql` | Same, for the `llm_usage` table added later. |
+| `003_job_source_owner_fk.sql` | Same, for the `job_source` watchlist added in Phase 4. |

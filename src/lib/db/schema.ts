@@ -104,6 +104,19 @@ export const applicationStatus = pgEnum("application_status", [
   "skipped",
 ]);
 
+/**
+ * Where a watchlist entry is checked.
+ *
+ * `greenhouse` and `lever` are board tokens against a published JSON feed.
+ * `careerpage` is a company's own careers URL, read with a headless browser
+ * because there is no feed to read instead — see the note on `jobSource`.
+ */
+export const jobSourceKind = pgEnum("job_source_kind", [
+  "greenhouse",
+  "lever",
+  "careerpage",
+]);
+
 /* =============================================================================
    TRACK RECORD — Phase 1
    ==========================================================================*/
@@ -302,6 +315,54 @@ export const jobCriteria = pgTable(
     ...timestamps,
   },
   (t) => [index("job_criteria_owner_idx").on(t.ownerId)],
+);
+
+/**
+ * THE WATCHLIST — the companies discovery actually checks.
+ *
+ * Greenhouse and Lever have no global search: a board token *is* the query,
+ * so without a list of tokens `discover()` has nothing to ask and returns
+ * nothing. This table is that list.
+ *
+ * `careerpage` is the deliberate exception to "no scraping". It is one page,
+ * belonging to one company the owner typed in themselves, fetched on a slow
+ * schedule with robots.txt honoured — not a board walked with pagination.
+ * The distinction is enforced by the runner, not by good intentions: see
+ * `docs/DISCOVERY-PIPELINE.md`.
+ *
+ * `lastRunAt` / `lastError` exist so a board that has quietly 404'd for a
+ * month is visible in the UI rather than just absent from the results.
+ */
+export const jobSource = pgTable(
+  "job_source",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ...ownership,
+    kind: jobSourceKind("kind").notNull(),
+    /** Display name — the company, as a person would say it. */
+    label: text("label").notNull(),
+    /**
+     * The board token for greenhouse/lever, or the full https URL for a
+     * careerpage. One column because exactly one of them is ever meaningful,
+     * and `kind` already says which.
+     */
+    target: text("target").notNull(),
+    /** Narrows this source only; empty means keep everything it returns. */
+    keywords: text("keywords").array().notNull().default([]),
+    enabled: boolean("enabled").notNull().default(true),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (t) => [
+    index("job_source_owner_enabled_idx").on(t.ownerId, t.enabled),
+    // The same board added twice is a mistake, not two sources.
+    uniqueIndex("job_source_owner_kind_target_idx").on(
+      t.ownerId,
+      t.kind,
+      t.target,
+    ),
+  ],
 );
 
 export const job = pgTable(
