@@ -3,104 +3,266 @@ import Link from "next/link";
 import {
   ArrowRight,
   Briefcase,
-  Check,
-  Circle,
+  FileText,
   Flame,
   NotebookPen,
   Send,
+  Sparkles,
+  Wand2,
 } from "lucide-react";
 
 import { requireUser } from "@/lib/auth";
-import { PHASES } from "@/lib/phases";
+import { homeStats, strongMatchCount } from "@/lib/dashboard/queries";
 import { dashboardStats, listEntries } from "@/lib/journal/queries";
-import { formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
-import { StatTile } from "@/components/stat-tile";
 import { EntryCard } from "@/components/journal/entry-card";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
+/**
+ * WHAT IS THE STATE OF MY SEARCH, AND WHAT DO I DO NEXT
+ * ====================================================
+ *
+ * Those are the only two questions a home screen owes an answer to, so those
+ * are the only two things on it.
+ *
+ * What used to be here — a build roadmap and a four-step diagram of how JobOS
+ * works — is gone. Both are things the app says *about itself*, which is
+ * marketing copy on the screen you open every day. You already know how it
+ * works; you opened it.
+ *
+ * The four stat tiles were also two-thirds fiction: jobs and applications
+ * rendered hard-coded zeros with a TODO beside them. That is worse than
+ * showing nothing, because it looks like data and gets read like data.
+ */
+
+/** One number, big. The whole tile is the link when there is somewhere to go. */
+function Stat({
+  label,
+  value,
+  hint,
+  href,
+  icon: Icon,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  hint: string;
+  href?: string;
+  icon: React.ElementType;
+  accent?: boolean;
+}) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <p className="t-slate truncate">{label}</p>
+        <Icon
+          className={cn("h-4 w-4 shrink-0", accent ? "text-accent" : "text-fg-faint")}
+          strokeWidth={2}
+        />
+      </div>
+      <p
+        className={cn(
+          "t-num mt-2 text-[2.5rem] leading-none font-extrabold tracking-[-0.045em]",
+          accent ? "t-gradient" : "text-fg",
+        )}
+      >
+        {value}
+      </p>
+      <p className="mt-1.5 text-xs leading-relaxed text-fg-subtle">{hint}</p>
+    </>
+  );
+
+  const className = cn(
+    "block rounded-card border border-line bg-surface p-5",
+    href && "fx-lift hover:border-line-strong",
+  );
+
+  return href ? (
+    <Link href={href} className={className}>
+      {body}
+    </Link>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
+/** The things you actually came here to do. */
+function QuickAction({
+  href,
+  icon: Icon,
+  title,
+  hint,
+  primary,
+}: {
+  href: string;
+  icon: React.ElementType;
+  title: string;
+  hint: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "fx-tap group flex items-center gap-3 rounded-card border p-4",
+        primary
+          ? "bg-heat border-transparent text-fg-on-accent shadow-e2"
+          : "border-line bg-surface hover:border-line-strong hover:bg-sunken",
+      )}
+    >
+      <Icon
+        className={cn("h-5 w-5 shrink-0", primary ? "" : "text-fg-muted")}
+        strokeWidth={2.25}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span
+          className={cn(
+            "block text-xs leading-snug",
+            primary ? "opacity-85" : "text-fg-subtle",
+          )}
+        >
+          {hint}
+        </span>
+      </span>
+      <ArrowRight
+        className="h-4 w-4 shrink-0 opacity-40 transition-transform duration-(--animate-duration-1) ease-(--ease-spring) group-hover:translate-x-0.5 group-hover:opacity-80"
+        strokeWidth={2.5}
+      />
+    </Link>
+  );
+}
+
 export default async function DashboardPage() {
   const user = await requireUser();
-  const [stats, recent] = await Promise.all([
+
+  const [stats, streakStats, recent, strong] = await Promise.all([
+    homeStats(),
     dashboardStats(),
     listEntries({ limit: 3 }),
+    strongMatchCount(),
   ]);
 
   const firstName = user.name.split(" ")[0];
-  const empty = stats.totalEntries === 0;
+  const empty = stats.entries === 0;
+
+  /**
+   * The one thing most worth doing, said in the subtitle.
+   *
+   * Ordered by what blocks what: with no journal nothing else works, with no
+   * resume there is nothing to tailor, and a stale journal is the failure this
+   * whole tool exists to prevent.
+   */
+  const nudge = empty
+    ? "Nothing logged yet. One line about today is enough to start — everything else is built from it."
+    : stats.daysSinceLog !== null && stats.daysSinceLog >= 3
+      ? `Nothing logged for ${stats.daysSinceLog} days. The details are the first thing to go.`
+      : !stats.resumeEntries
+        ? "Your journal has material. Turn some of it into resume entries next."
+        : strong
+          ? `${strong} ${strong === 1 ? "posting is" : "postings are"} waiting to be looked at.`
+          : `${stats.entries} entries on the record. The value compounds the moment you need a resume.`;
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
-      <PageHeader
-        eyebrow={<span className="t-slate">{formatDate(new Date())}</span>}
-        title={`Good to see you, ${firstName}.`}
-        description={
-          empty
-            ? "Nothing is logged yet — which is exactly what an empty career record looks like on day one. The fastest way to make this screen useful is to write down what you did today."
-            : `${stats.totalEntries} ${stats.totalEntries === 1 ? "entry" : "entries"} on the record. Keep it going — the value compounds the moment you need a resume.`
-        }
-        actions={
-          <Link
-            href="/journal"
-            className="inline-flex h-10 items-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-fg-on-accent shadow-e1 transition-colors duration-200 ease-out hover:bg-accent-hover active:bg-accent-press"
-          >
-            <NotebookPen className="h-4 w-4" strokeWidth={2.25} />
-            Log today&rsquo;s work
-          </Link>
-        }
-      />
+      <PageHeader title={`Good to see you, ${firstName}.`} description={nudge} />
+
+      <section aria-label="Quick actions" className="grid gap-3 sm:grid-cols-2">
+        <QuickAction
+          href="/journal?compose=1"
+          icon={NotebookPen}
+          title="Log today's work"
+          hint="One line. Ten seconds."
+          primary
+        />
+        <QuickAction
+          href="/jobs"
+          icon={Briefcase}
+          title="See what's worth applying to"
+          hint={
+            strong
+              ? `${strong} scored against your journal`
+              : "Nothing found yet — add a title to watch"
+          }
+        />
+        <QuickAction
+          href="/resume"
+          icon={FileText}
+          title="Work on the resume"
+          hint={
+            stats.resumeScore !== null
+              ? `Scoring ${stats.resumeScore}/100`
+              : "Empty — start from your journal"
+          }
+        />
+        <QuickAction
+          href="/tailor"
+          icon={Wand2}
+          title="Tailor it to a posting"
+          hint="Paste a link, get a rewrite"
+        />
+      </section>
 
       <section
         className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
         aria-label="At a glance"
       >
-        <StatTile
-          label="Logs this week"
+        <Stat
+          label="Logged this week"
           value={stats.entriesThisWeek}
-          hint="Entries written in the last 7 days."
+          hint={`${stats.entries} on the record in total.`}
           icon={NotebookPen}
-          tone="accent"
+          href="/journal"
+          accent
         />
-        <StatTile
-          label="Current streak"
-          value={stats.streak}
+        <Stat
+          label="Streak"
+          value={streakStats.streak}
           hint={
-            stats.streak > 0
-              ? `${stats.streak} consecutive ${stats.streak === 1 ? "day" : "days"}.`
-              : "Consecutive days with an entry."
+            streakStats.streak > 0
+              ? `${streakStats.streak} consecutive ${streakStats.streak === 1 ? "day" : "days"}.`
+              : "Log two days running to start one."
           }
           icon={Flame}
-          tone="craft"
         />
-        {/* TODO(Phase 4): real counts from `job` and `application`. */}
-        <StatTile
-          label="Jobs matched"
-          value={0}
-          hint="Open roles above your match threshold."
-          icon={Briefcase}
+        <Stat
+          label="Skills evidenced"
+          value={stats.skills}
+          hint="Distinct technologies your journal can prove."
+          icon={Sparkles}
+          href="/journal"
         />
-        <StatTile
-          label="Applications live"
-          value={0}
-          hint="Sent and not yet closed out."
+        <Stat
+          label="In the pipeline"
+          value={stats.jobsOpen}
+          hint={
+            stats.interviewing
+              ? `${stats.applied} applied · ${stats.interviewing} interviewing.`
+              : stats.applied
+                ? `${stats.applied} applied.`
+                : "Postings you have not dealt with yet."
+          }
           icon={Send}
+          href="/jobs"
         />
       </section>
 
       {recent.length ? (
         <section className="space-y-3">
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-base font-semibold text-fg">Latest entries</h2>
+            <h2 className="text-lg font-semibold text-fg">Latest entries</h2>
             <Link
               href="/journal"
-              className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-fg-accent hover:gap-2.5"
+              className="group flex items-center gap-1.5 text-sm font-semibold text-fg-accent"
             >
               Open the journal
-              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+              <ArrowRight
+                className="h-3.5 w-3.5 transition-transform duration-(--animate-duration-1) ease-(--ease-spring) group-hover:translate-x-0.5"
+                strokeWidth={2.5}
+              />
             </Link>
           </div>
           {recent.map((entry) => (
@@ -108,101 +270,6 @@ export default async function DashboardPage() {
           ))}
         </section>
       ) : null}
-
-      <section className="grid gap-4 lg:grid-cols-[1.55fr_1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Build roadmap</CardTitle>
-            <p className="text-sm leading-relaxed text-fg-muted">
-              JobOS is built in phases, each one useful on its own. This is
-              where the build currently stands.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {PHASES.map((phase) => {
-              const done = phase.status === "shipped";
-              const active = phase.status === "building";
-
-              return (
-                <div
-                  key={phase.id}
-                  className="flex gap-3.5 rounded-control px-2 py-2.5 transition-colors duration-200 ease-out hover:bg-sunken"
-                >
-                  <span className="mt-0.5 shrink-0">
-                    {done ? (
-                      <Check className="h-4 w-4 text-success-fg" strokeWidth={2.5} />
-                    ) : active ? (
-                      <span className="grid h-4 w-4 place-items-center">
-                        <span className="h-2 w-2 rounded-pill bg-accent" />
-                      </span>
-                    ) : (
-                      <Circle className="h-4 w-4 text-fg-faint" strokeWidth={1.75} />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p
-                        className={
-                          active
-                            ? "text-sm font-semibold text-fg"
-                            : done
-                              ? "text-sm font-medium text-fg-muted"
-                              : "text-sm font-medium text-fg-muted"
-                        }
-                      >
-                        Phase {phase.id.slice(1)} · {phase.title}
-                      </p>
-                      {active ? <Badge tone="accent">In progress</Badge> : null}
-                      {done ? <Badge tone="success">Shipped</Badge> : null}
-                    </div>
-                    <p className="mt-0.5 max-w-[62ch] text-xs leading-relaxed text-fg-subtle">
-                      {phase.summary}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden">
-          <div className="bg-dots pointer-events-none absolute inset-0 opacity-50 [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-          <CardHeader className="relative">
-            <CardTitle>How JobOS works</CardTitle>
-            <p className="text-sm leading-relaxed text-fg-muted">
-              Four pillars, each feeding the next.
-            </p>
-          </CardHeader>
-          <CardContent className="relative">
-            <ol className="space-y-4 border-l border-line pl-5">
-              {[
-                { n: "Journal", t: "You log the work as it happens, in your own words." },
-                { n: "Resume", t: "That record becomes a structured master resume." },
-                { n: "Tailoring", t: "Each job description reshapes it — using only real facts." },
-                { n: "Agent", t: "Matching roles arrive, tailored and ready to send." },
-              ].map((step, i) => (
-                <li key={step.n} className="relative">
-                  <span className="t-num absolute top-0 -left-[1.6875rem] grid h-5 w-5 place-items-center rounded-pill border border-line bg-surface text-[0.625rem] font-bold text-fg-subtle">
-                    {i + 1}
-                  </span>
-                  <p className="text-[0.8125rem] font-semibold text-fg">{step.n}</p>
-                  <p className="mt-0.5 text-xs leading-relaxed text-fg-subtle">
-                    {step.t}
-                  </p>
-                </li>
-              ))}
-            </ol>
-
-            <Link
-              href="/journal"
-              className="mt-6 inline-flex items-center gap-1.5 text-[0.8125rem] font-semibold text-fg-accent hover:gap-2.5"
-            >
-              {empty ? "Start with a log entry" : "Add today's entry"}
-              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </Link>
-          </CardContent>
-        </Card>
-      </section>
     </div>
   );
 }

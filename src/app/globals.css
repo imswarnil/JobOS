@@ -418,6 +418,21 @@
 	html {
 		scroll-behavior: smooth;
 		-webkit-text-size-adjust: 100%;
+
+		/*
+		 * One lever for "bigger".
+		 *
+		 * Every size in the app is in rem, so moving the root moves the whole
+		 * scale together and nothing has to be re-tuned component by
+		 * component. 17px rather than 16 is about a 6% lift — small enough
+		 * that no layout breaks, large enough that the difference between
+		 * "dense admin panel" and "app you read" is visible.
+		 *
+		 * This is deliberately the *only* type change. Adding a bespoke scale
+		 * would be a second system to keep in sync with Tailwind's, and the
+		 * point of the token file is that there is one of everything.
+		 */
+		font-size: 17px;
 	}
 
 	body {
@@ -432,9 +447,16 @@
 	}
 
 	h1, h2, h3, h4, h5, h6 {
-		letter-spacing: -0.02em;
+		letter-spacing: -0.025em;
 		text-wrap: balance;
-		font-weight: 600;
+		font-weight: 650;
+		line-height: 1.2;
+	}
+
+	/* Prose gets room to breathe. A 1.5 line-height on a 17px base is the
+	   difference between scanning a screen and squinting at it. */
+	p, li {
+		line-height: 1.55;
 	}
 
 	::selection {
@@ -476,7 +498,7 @@
 	   single face we get the same "this is a label, not prose" signal from
 	   size, weight and tracking. */
 	.t-slate {
-		font-size: 0.6875rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		letter-spacing: var(--tracking-slate);
 		text-transform: uppercase;
