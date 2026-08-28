@@ -8,7 +8,6 @@ import {
   Check,
   ChevronDown,
   Loader2,
-  Plus,
   X,
 } from "lucide-react";
 
@@ -17,6 +16,7 @@ import { LOG_TYPES } from "@/lib/journal/types";
 import type { LogType } from "@/lib/db/schema";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
+import { QuickCompose } from "@/components/journal/quick-compose";
 import { cn } from "@/lib/utils";
 
 interface Option {
@@ -58,6 +58,8 @@ export function EntryComposer({
   const autoOpen = params.get("compose") === "1";
 
   const [open, setOpen] = React.useState(autoOpen);
+  /** Carried across when "Add detail" promotes a quick line to the full form. */
+  const [draft, setDraft] = React.useState("");
   const [type, setType] = React.useState<LogType>("work");
   const [companyId, setCompanyId] = React.useState(currentCompanyId ?? "");
   const [showDetail, setShowDetail] = React.useState(false);
@@ -95,23 +97,20 @@ export function EntryComposer({
     }
   }
 
+  /**
+   * The default state is a box you can type in, not a button that reveals a
+   * box you can type in. One click of friction is enough to lose the entry,
+   * and the entry you did not write is the only failure that matters here.
+   */
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={cn(
-          "fx-press group flex w-full items-center gap-3 rounded-card border border-dashed border-line-strong bg-surface px-5 py-4",
-          "text-left text-sm text-fg-subtle transition-colors duration-200 ease-out",
-          "hover:border-line-accent hover:bg-sunken hover:text-fg",
-        )}
-      >
-        <Plus
-          className="h-4 w-4 shrink-0 transition-transform duration-200 ease-out group-hover:rotate-90"
-          strokeWidth={2.25}
-        />
-        What happened today? One line is enough.
-      </button>
+      <QuickCompose
+        currentCompanyId={currentCompanyId}
+        onExpand={(typed) => {
+          setDraft(typed);
+          setOpen(true);
+        }}
+      />
     );
   }
 
@@ -158,6 +157,9 @@ export function EntryComposer({
           required
           maxLength={200}
           autoFocus
+          // Carried over from the quick box, so promoting a half-typed line
+          // to the long form never costs you what you already wrote.
+          defaultValue={draft}
           placeholder={meta.prompt}
           aria-label="What happened"
           className={cn(
