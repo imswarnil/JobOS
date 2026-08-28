@@ -56,7 +56,7 @@ async function ensureDemoUser() {
       // Better Auth requires an Origin it trusts. `allow_localhost` is on for
       // this project, so the dev origin is accepted; override with APP_ORIGIN
       // when seeding against a deployed environment.
-      origin: process.env.APP_ORIGIN ?? "http://localhost:3000",
+      origin: process.env.APP_ORIGIN ?? "http://localhost:3100",
     },
     body: JSON.stringify({
       email: DEMO_EMAIL,

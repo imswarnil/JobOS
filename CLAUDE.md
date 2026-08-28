@@ -168,14 +168,25 @@ Both lint and typecheck must stay clean. Two lint rules bite often:
 
 ## Stopping the local servers
 
-`pnpm stop` (`scripts/stop.sh`) kills the dev server, `next start`, drizzle
-studio and their `pnpm` wrappers, then frees 3000, 3001 and 4983.
+**JobOS dev runs on port 3100, and that number is the fix for a real bug.**
+Two other projects on this machine default to :3000, and a Node server that
+binds `[::1]:3000` shadows one bound to `*:3000` for every localhost request
+— so JobOS would start "successfully" while the browser showed a different
+app. A port nothing else uses ends the whole class of failure. If 3100 ever
+collides with something, pick another four-digit port nothing uses; do not
+move back to 3000.
 
-It only kills a process whose **working directory is this repo**. That is the
-whole point: a sibling Next app — sometimes under a different macOS account —
-holds :3000 on this machine, which is why `pnpm dev` keeps landing on 3001.
-Those are reported, never killed. `--force` overrides for same-user processes;
-it cannot cross accounts without sudo.
+`pnpm dev` also runs `scripts/stop.sh` first (the `predev` hook), so starting
+the dev server *takes over* from a stale one instead of failing with
+"Another next dev server is already running".
+
+`pnpm stop` kills the dev server, `next start`, drizzle studio and their
+`pnpm` wrappers, then frees 3000, 3001, 3100 and 4983.
+
+It only kills a process whose **working directory is this repo**. A sibling
+app squatting one of those ports — sometimes under a different macOS account
+— is reported, never killed. `--force` overrides for same-user processes; it
+cannot cross accounts without sudo.
 
 `lsof` only sees sockets owned by the user running it, so a port held by
 another account looks free to it. The script falls back to `netstat` for that

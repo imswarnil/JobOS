@@ -82,7 +82,7 @@ accent-coloured, two of them are wrong.
 ```bash
 pnpm install
 cp .env.example .env.local     # then fill it in — see below
-pnpm dev                       # http://localhost:3000
+pnpm dev                       # http://localhost:3100
 ```
 
 ### `dev` vs `preview`

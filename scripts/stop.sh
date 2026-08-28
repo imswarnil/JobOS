@@ -22,7 +22,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 
-PORTS=(3000 3001 4983)   # next dev, its fallback port, drizzle studio
+PORTS=(3000 3001 4983 3100)   # next dev, its fallback port, drizzle studio
 DRY=""
 FORCE=""
 
