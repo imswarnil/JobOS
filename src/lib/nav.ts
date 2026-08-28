@@ -101,8 +101,7 @@ export const NAV: NavGroup[] = [
         label: "Jobs",
         href: "/jobs",
         icon: Briefcase,
-        description: "Roles worth your time, pulled from public job APIs.",
-        phase: "P4",
+        description: "Roles ranked against what your journal proves you have done.",
       },
       {
         label: "Applications",
