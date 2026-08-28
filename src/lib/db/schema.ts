@@ -317,6 +317,15 @@ export const job = pgTable(
     company: text("company"),
     url: text("url"),
     description: text("description"),
+    /**
+     * Kept as the feed's own string rather than parsed into a place.
+     * "Remote, United States", "London or Berlin" and "Hybrid — 3 days" are
+     * all real values, and normalising them loses more than it gains.
+     */
+    location: text("location"),
+    remote: boolean("remote"),
+    salaryMin: integer("salary_min"),
+    salaryMax: integer("salary_max"),
     postedAt: timestamp("posted_at", { withTimezone: true }),
     /** 0–100. Null until scored. */
     matchScore: integer("match_score"),
