@@ -133,7 +133,8 @@ Radii are rounder than the parent system and every duration is faster
 (90/140/240/420ms). Both are deliberate: this is a tool someone opens on a
 Sunday evening, and a 200ms hover reads as lag.
 
-Tokens live at the top of `src/app/globals.css` in two tiers:
+Tokens live at the top of `src/app/app.css` in two tiers (`globals.css` is
+the superseded first pass — on disk, unimported, do not edit it):
 
 1. **Primitive ramps** (`--ink-*`, `--signal-*`, `--amber-*`) — never used
    directly by a component.

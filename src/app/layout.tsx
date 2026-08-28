@@ -5,7 +5,10 @@ import { Figtree } from "next/font/google";
 import { RAIL_COOKIE, THEME_COOKIE, isTheme } from "@/lib/preferences";
 import { RegisterServiceWorker } from "@/components/pwa/register-sw";
 
-import "./globals.css";
+// app.css superseded globals.css on 2026-08-28. The old sheet stays on disk,
+// unimported, as the record of the first design pass — see the header of
+// app.css for what changed and why.
+import "./app.css";
 
 /**
  * One face for the whole product. Figtree has a tall x-height and open
