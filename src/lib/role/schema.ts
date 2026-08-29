@@ -15,38 +15,74 @@ import { z } from "zod";
  * they should be searching for as well.
  */
 
+/**
+ * A length limit that trims instead of rejecting — see the identical helper
+ * in `lib/tailor/schema.ts` for why: `completeJson` treats a schema failure
+ * as a provider failure, so a `.max(N)` on one string discards an otherwise
+ * good verdict and falls through the whole provider chain.
+ */
+function cappedMin1(max: number) {
+  return z
+    .string()
+    .transform((v) => v.trim().slice(0, max))
+    .pipe(z.string().min(1));
+}
+
+/** Same, for string arrays: drops empties rather than failing on them. */
+function cappedList(max: number, limit: number) {
+  return z
+    .array(z.unknown())
+    .transform((items) =>
+      items
+        .filter((i): i is string => typeof i === "string")
+        .map((i) => i.trim().slice(0, max))
+        .filter(Boolean)
+        .slice(0, limit),
+    )
+    .default([]);
+}
+
+/** Same, for the `{ title, why }` pairs in `notQuite`. */
+function cappedNotQuite(limit: number) {
+  return z
+    .array(z.unknown())
+    .transform((items) =>
+      items
+        .filter((i): i is Record<string, unknown> => typeof i === "object" && i !== null)
+        .map((i) => ({
+          title: typeof i.title === "string" ? i.title.trim().slice(0, 60) : "",
+          why: typeof i.why === "string" ? i.why.trim().slice(0, 240) : "",
+        }))
+        .filter((i) => i.title && i.why)
+        .slice(0, limit),
+    )
+    .default([]);
+}
+
 export const roleVerdictSchema = z.object({
   /** The one title to put at the top of a resume. */
-  title: z.string().trim().min(1).max(80),
+  title: cappedMin1(80),
   /** One sentence on why this and not the neighbouring title. */
-  reasoning: z.string().trim().min(1).max(500),
+  reasoning: cappedMin1(500),
   /** How sure, given how much was logged. Low is an honest answer. */
   confidence: z.enum(["low", "medium", "high"]),
   /** Other titles for the same work — the ones to also search for. */
-  alsoCalled: z.array(z.string().trim().max(60)).max(5).default([]),
+  alsoCalled: cappedList(60, 5),
   /** Titles they might think they are, and why they are not — the confusion. */
-  notQuite: z
-    .array(
-      z.object({
-        title: z.string().trim().max(60),
-        why: z.string().trim().max(240),
-      }),
-    )
-    .max(3)
-    .default([]),
+  notQuite: cappedNotQuite(3),
   /** The skills the evidence actually supports, for the resume. */
-  strengths: z.array(z.string().trim().max(60)).max(8).default([]),
+  strengths: cappedList(60, 8),
   /** Quoted from their own entries. The grounding. */
-  evidence: z.array(z.string().trim().max(240)).max(5).default([]),
+  evidence: cappedList(240, 5),
   /**
    * The party line. What you say when someone at a wedding asks what you do
    * and "I work on distributed billing systems" makes their eyes glaze.
    */
-  explainToMum: z.string().trim().min(1).max(300),
+  explainToMum: cappedMin1(300),
   /** Two or three, self-deprecating, about the job rather than the person. */
-  jokes: z.array(z.string().trim().max(240)).min(1).max(4),
+  jokes: cappedList(240, 4),
   /** What is missing from the record that would sharpen this. */
-  gaps: z.array(z.string().trim().max(200)).max(4).default([]),
+  gaps: cappedList(200, 4),
 });
 
 export type RoleVerdict = z.infer<typeof roleVerdictSchema>;
